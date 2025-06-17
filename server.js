@@ -71,41 +71,26 @@ app.get('/api/classes/for-courses', async (req, res) => {
 // Update this proxy route in your server.js
 app.post('/api/generate-schedule', async (req, res) => {
     try {
-        // Try multiple possible URLs in order
-        const possibleUrls = [
-            'http://ml_service:5000/generate-schedule',  // Docker service name (fixed the hyphen)
-            'http://localhost:5001/generate-schedule',   // Local development (fixed the hyphen)
-            process.env.ML_SERVICE_URL                   // From environment variable if set
-        ].filter(Boolean); // Remove null/undefined entries
+        const mlServiceUrl = process.env.NODE_ENV === 'production'
+            ? process.env.ML_SERVICE_URL
+            : 'http://ml_service:5000';
+
+        console.log(`Attempting to connect to ML service at: ${mlServiceUrl}`);
         
-        let lastError = null;
-        
-        for (const url of possibleUrls) {
-            try {
-                console.log(`Trying ML service at: ${url}`);
-                const response = await axios.post(
-                    url,
-                    req.body,
-                    {
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        timeout: 10000 // Increased timeout to 10 seconds
-                    }
-                );
-                
-                console.log(`Successfully connected to ML service at: ${url}`);
-                return res.json(response.data);
-            } catch (error) {
-                console.log(`Failed to connect to ${url}: ${error.message}`);
-                lastError = error;
+        const response = await axios.post(
+            `${mlServiceUrl}/generate-schedule`,
+            req.body,
+            {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 30000
             }
-        }
-        
-        // If we get here, all URLs failed
-        throw lastError || new Error("Failed to connect to any ML service URL");
+        );
+
+        console.log('Successfully received response from ML service');
+        return res.json(response.data);
     } catch (error) {
-        console.error('Error proxying request to ML service:', error);
+        console.error('Error connecting to ML service:', error.message);
+        console.error('Full error:', error);
         res.status(error.response?.status || 500).json({
             error: 'Failed to connect to ML service',
             details: error.message
