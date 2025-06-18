@@ -7,16 +7,18 @@ from datetime import datetime
 import logging
 
 app = Flask(__name__)
+# Update CORS configuration
 CORS(app, resources={
     r"/*": {
         "origins": [
-            "https://course-scheduler-web.onrender.com",  # Production
-            "https://your-web-service-name.onrender.com", # Add your web service URL
-            "http://localhost:3000",  # Local development
-            "http://web:3000"  # Docker development
+            "https://course-scheduler-web.onrender.com",
+            "http://localhost:3000",
+            "http://web:3000",
+            "*"  # Temporarily allow all origins for testing
         ],
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "allow_headers": ["Content-Type", "Authorization", "Origin"],
+        "expose_headers": ["Content-Type", "Authorization"]
     }
 })
 
@@ -48,32 +50,59 @@ def ping():
         "port": os.environ.get('PORT', 'unknown')
     })
 
-@app.route('/generate-schedule', methods=['POST'])
+@app.route('/generate-schedule', methods=['POST', 'OPTIONS'])
 def generate_schedule():
     """Generate a course schedule based on provided requirements"""
-    try:
-        logger.info("Received request at /generate-schedule")
-        data = request.json
-        logger.info(f"Headers: {dict(request.headers)}")
-        logger.info(f"Request payload: {data}")
+    if request.method == 'OPTIONS':
+        return '', 204
         
+    try:
+        logger.info("=== Received Schedule Generation Request ===")
+        logger.info(f"Request Headers: {dict(request.headers)}")
+        logger.info(f"Origin: {request.headers.get('Origin', 'No origin')}")
+        logger.info(f"Content-Type: {request.headers.get('Content-Type')}")
+        
+        data = request.json
         if not data:
+            logger.error("No JSON data received")
             return jsonify({"error": "No data provided"}), 400
             
+        logger.info(f"Request Payload: {data}")
+        
         processed_data = data_processor.process_payload(data)
         schedule_result = optimizer.create_schedule(processed_data)
         
-        logger.info("Generated schedule successfully")
+        logger.info("Schedule generated successfully")
+        logger.info(f"Response: {schedule_result}")
         return jsonify(schedule_result)
         
     except Exception as e:
-        logger.exception("Error generating schedule")
+        logger.exception("Error in generate_schedule:")
         return jsonify({
             "error": str(e),
             "metadata": {
-                "success": False
+                "success": False,
+                "timestamp": str(datetime.now())
             }
         }), 500
+
+@app.route('/test-connection', methods=['POST'])
+def test_connection():
+    """Test endpoint to verify connection and payload handling"""
+    try:
+        logger.info("=== Test Connection Request ===")
+        logger.info(f"Headers: {dict(request.headers)}")
+        data = request.json
+        
+        return jsonify({
+            "status": "success",
+            "received_data": data,
+            "timestamp": str(datetime.now()),
+            "headers_received": dict(request.headers)
+        })
+    except Exception as e:
+        logger.exception("Error in test connection:")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
