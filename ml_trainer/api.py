@@ -5,6 +5,7 @@ from data_processor import ScheduleDataProcessor
 import os
 from datetime import datetime
 import logging
+import json
 
 app = Flask(__name__)
 # Update CORS configuration
@@ -50,34 +51,27 @@ def ping():
         "port": os.environ.get('PORT', 'unknown')
     })
 
-@app.route('/generate-schedule', methods=['POST', 'OPTIONS'])
+@app.route('/generate-schedule', methods=['POST'])
 def generate_schedule():
     """Generate a course schedule based on provided requirements"""
-    if request.method == 'OPTIONS':
-        return '', 204
-        
     try:
-        logger.info("=== Received Schedule Generation Request ===")
-        logger.info(f"Request Headers: {dict(request.headers)}")
-        logger.info(f"Origin: {request.headers.get('Origin', 'No origin')}")
-        logger.info(f"Content-Type: {request.headers.get('Content-Type')}")
-        
+        logger.info("=== Schedule Generation Request ===")
         data = request.json
-        if not data:
-            logger.error("No JSON data received")
-            return jsonify({"error": "No data provided"}), 400
-            
-        logger.info(f"Request Payload: {data}")
-        
-        processed_data = data_processor.process_payload(data)
+        logger.info(f"1. Raw payload received: {json.dumps(data, indent=2)}")
+
+        # Process payload
+        processor = ScheduleDataProcessor()
+        processed_data = processor.process_payload(data)
+        logger.info(f"2. Data after processing: {json.dumps(processed_data, indent=2)}")
+
+        # Generate schedule
+        optimizer = ScheduleOptimizer()
         schedule_result = optimizer.create_schedule(processed_data)
-        
-        logger.info("Schedule generated successfully")
-        logger.info(f"Response: {schedule_result}")
+        logger.info(f"3. Final schedule result: {json.dumps(schedule_result, indent=2)}")
+
         return jsonify(schedule_result)
-        
     except Exception as e:
-        logger.exception("Error in generate_schedule:")
+        logger.exception("Error in schedule generation:")
         return jsonify({
             "error": str(e),
             "metadata": {
@@ -126,6 +120,34 @@ def test_payload():
         })
     except Exception as e:
         logger.exception("Error in test payload:")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/test-course-data', methods=['POST'])
+def test_course_data():
+    """Test endpoint to verify course data processing"""
+    try:
+        data = request.json
+        logger.info("=== Course Data Test ===")
+        
+        # Verify course data structure
+        course_data = data.get('courseData', [])
+        logger.info(f"Number of courses: {len(course_data)}")
+        for course in course_data:
+            logger.info(f"Course: {course.get('course_name')}")
+            logger.info(f"Sections: {len(course.get('sections', []))}")
+            
+        # Process with data processor
+        processor = ScheduleDataProcessor()
+        processed = processor.process_payload(data)
+        
+        return jsonify({
+            "status": "success",
+            "course_count": len(course_data),
+            "processed_data": processed,
+            "timestamp": str(datetime.now())
+        })
+    except Exception as e:
+        logger.exception("Error processing course data:")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
