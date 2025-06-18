@@ -51,27 +51,38 @@ def ping():
         "port": os.environ.get('PORT', 'unknown')
     })
 
-@app.route('/generate-schedule', methods=['POST'])
+@app.route('/generate-schedule', methods=['POST', 'OPTIONS'])
 def generate_schedule():
-    """Generate a course schedule based on provided requirements"""
+    """Generate and return a complete course schedule"""
+    if request.method == 'OPTIONS':
+        return '', 204
+        
     try:
         logger.info("=== Schedule Generation Request ===")
         data = request.json
-        logger.info(f"1. Raw payload received: {json.dumps(data, indent=2)}")
-
-        # Process payload
+        logger.info(f"Incoming payload: {json.dumps(data, indent=2)}")
+        
+        # Process raw data into scheduler-friendly format
         processor = ScheduleDataProcessor()
         processed_data = processor.process_payload(data)
-        logger.info(f"2. Data after processing: {json.dumps(processed_data, indent=2)}")
-
-        # Generate schedule
+        logger.info(f"Processed data complete with {len(processed_data['classes'])} courses")
+        
+        # Generate the schedule
         optimizer = ScheduleOptimizer()
         schedule_result = optimizer.create_schedule(processed_data)
-        logger.info(f"3. Final schedule result: {json.dumps(schedule_result, indent=2)}")
-
-        return jsonify(schedule_result)
+        
+        # Log the result
+        logger.info(f"Schedule generation complete with {len(schedule_result.get('schedule', []))} semesters")
+        logger.info(f"Schedule metadata: {schedule_result.get('metadata', {})}")
+        
+        return jsonify({
+            "metadata": schedule_result.get('metadata', {}),
+            "schedule": schedule_result.get('schedule', []),
+            "timestamp": str(datetime.now())
+        })
+        
     except Exception as e:
-        logger.exception("Error in schedule generation:")
+        logger.exception("Error generating schedule:")
         return jsonify({
             "error": str(e),
             "metadata": {
@@ -148,6 +159,39 @@ def test_course_data():
         })
     except Exception as e:
         logger.exception("Error processing course data:")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/test-optimizer', methods=['POST'])
+def test_optimizer():
+    """Test endpoint for the optimizer functionality"""
+    try:
+        data = request.json
+        logger.info("=== Testing Optimizer ===")
+        
+        # Process the data
+        processor = ScheduleDataProcessor()
+        processed_data = processor.process_payload(data)
+        
+        # Initialize optimizer
+        optimizer = ScheduleOptimizer()
+        
+        # Test constraint checking
+        logger.info("Testing constraint validation...")
+        optimizer._validate_parameters(processed_data['parameters'])
+        
+        # Test course sorting
+        courses = [Course(**c) for c in processed_data['classes'].values()]
+        sorted_courses = optimizer._sort_courses_by_prerequisites(courses)
+        
+        return jsonify({
+            "status": "success",
+            "processed_data": processed_data,
+            "course_count": len(sorted_courses),
+            "first_course": sorted_courses[0].class_number if sorted_courses else None,
+            "timestamp": str(datetime.now())
+        })
+    except Exception as e:
+        logger.exception("Error in optimizer test:")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
