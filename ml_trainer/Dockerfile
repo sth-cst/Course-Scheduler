@@ -13,11 +13,12 @@ COPY . .
 RUN chmod +x entrypoint.sh
 
 # Set environment variables
-ENV PORT=5000
+ENV PORT=10000
 ENV PYTHONUNBUFFERED=1
+ENV FLASK_ENV=production
 
-# Expose the port the app will run on
-EXPOSE 5000
+# Expose the port
+EXPOSE 10000
 
-# Command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "api:app"]
+# Use gunicorn for production
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--threads", "8", "--timeout", "0", "api:app"]
