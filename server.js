@@ -71,17 +71,21 @@ app.get('/api/classes/for-courses', async (req, res) => {
 // Update this proxy route in your server.js
 app.post('/api/generate-schedule', async (req, res) => {
     try {
-        const mlServiceUrl = process.env.NODE_ENV === 'production'
-            ? process.env.ML_SERVICE_URL
-            : 'http://ml_service:5000';
-
-        console.log(`Attempting to connect to ML service at: ${mlServiceUrl}`);
+        // Get the correct ML service URL
+        const mlServiceUrl = process.env.ML_SERVICE_URL;
+        
+        console.log(`Attempting to connect to ML service at: ${mlServiceUrl}/generate-schedule`);
         
         const response = await axios.post(
-            `${mlServiceUrl}/generate-schedule`,
+            `${mlServiceUrl}/generate-schedule`, // This should be the full URL
             req.body,
             {
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Origin': process.env.NODE_ENV === 'production' 
+                        ? 'https://course-scheduler-web.onrender.com' 
+                        : 'http://localhost:3000'
+                },
                 timeout: 30000
             }
         );
@@ -89,8 +93,12 @@ app.post('/api/generate-schedule', async (req, res) => {
         console.log('Successfully received response from ML service');
         return res.json(response.data);
     } catch (error) {
-        console.error('Error connecting to ML service:', error.message);
-        console.error('Full error:', error);
+        console.error('Error connecting to ML service:', {
+            message: error.message,
+            status: error.response?.status,
+            url: `${process.env.ML_SERVICE_URL}/generate-schedule`
+        });
+        
         res.status(error.response?.status || 500).json({
             error: 'Failed to connect to ML service',
             details: error.message
