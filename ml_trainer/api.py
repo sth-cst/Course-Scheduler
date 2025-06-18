@@ -104,6 +104,30 @@ def test_connection():
         logger.exception("Error in test connection:")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/test-payload', methods=['POST'])
+def test_payload():
+    """Test endpoint for payload validation"""
+    try:
+        data = request.json
+        logger.info("=== Test Payload Request ===")
+        logger.info(f"Received payload with {len(data.get('courseData', []))} courses")
+        logger.info(f"Preferences: {data.get('preferences', {})}")
+        
+        # Validate key components
+        course_data = data.get('courseData', [])
+        preferences = data.get('preferences', {})
+        
+        return jsonify({
+            "status": "success",
+            "payload_size": len(str(data)),
+            "courses_count": len(course_data),
+            "preferences": preferences,
+            "timestamp": str(datetime.now())
+        })
+    except Exception as e:
+        logger.exception("Error in test payload:")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_ENV') == 'development'
