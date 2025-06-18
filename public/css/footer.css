@@ -1,0 +1,136 @@
+/*
+ * footer.css
+ *
+ * This file contains all the styling for the website footer.
+ * It should be linked in every HTML file where the footer is desired.
+ */
+
+/* =========================================
+   Base Layout for Sticky Footer
+   These styles ensure the footer stays at the bottom of the viewport
+   even on pages with minimal content.
+   ========================================= */
+   body {
+    /* Set body to be a flex container */
+    display: flex;
+    /* Stack children (header, main content, footer) vertically */
+    flex-direction: column;
+    /* Ensure body takes at least the full height of the viewport */
+    min-height: 100vh;
+    /* Ensure no default margin on body */
+    margin: 0;
+    /* Inherit font and background from global styles or define here */
+    font-family: 'Inter', sans-serif;
+    background-color: rgb(254, 254, 254);
+    color: #333;
+}
+
+/*
+ * This selector targets the main content wrapper of your pages.
+ * It's crucial for pushing the footer down when content is short.
+ * Adjust this selector if your main content wrapper has a different class/ID.
+ * Based on your HTML, '.background-image' and '.container' wrap most content.
+ * We'll use '.background-image' as the primary flex-grow element.
+ */
+.background-image {
+    /* Allow this section to grow and take up all available space */
+    flex-grow: 1;
+    /* Ensure existing background and sizing properties are maintained */
+    background: url() no-repeat center center fixed; /* Placeholder, update if needed */
+    background-size: cover;
+    display: flex; /* Keeping it flex as it was to center content */
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+    /* Adjust margins as per your specific page layouts if necessary */
+}
+
+/* =========================================
+   Footer Component Styles
+   ========================================= */
+.footer {
+    /* Footer background and text color */
+    background-color: #ba0c2f; /* Dark red */
+    color: #fff; /* White text */
+    
+    /* Padding around the footer content */
+    padding: 25px 20px;
+    
+    /* Center align all text within the footer */
+    text-align: center;
+    
+    /* Ensure the footer spans the full width */
+    width: 100%;
+    
+    /* Add some space between the main content and the footer */
+    margin-top: 50px;
+    
+    /* Include padding and border in the element's total width and height */
+    box-sizing: border-box;
+    
+    /* Ensure footer doesn't shrink, especially in flex parent */
+    flex-shrink: 0;
+}
+
+.footer-links {
+    /* Margin below the links section */
+    margin-bottom: 15px;
+    
+    /* Use flexbox to arrange links horizontally */
+    display: flex;
+    /* Center the links within the footer */
+    justify-content: center;
+    /* Allow links to wrap to the next line on smaller screens */
+    flex-wrap: wrap;
+    /* Space between individual links */
+    gap: 20px;
+}
+
+.footer-links a {
+    /* Link text color */
+    color: #fff;
+    /* Remove default underline from links */
+    text-decoration: none;
+    /* Font size for links */
+    font-size: 15px;
+    /* Smooth transition for hover effects */
+    transition: color 0.2s ease-in-out;
+}
+
+.footer-links a:hover {
+    /* Slightly change color on hover for feedback */
+    color: #f0f0f0;
+}
+
+.footer p {
+    /* Font size for copyright/info text */
+    font-size: 14px;
+    /* Remove default paragraph margins */
+    margin: 0;
+    /* Lighter color for secondary text */
+    color: #bbb;
+}
+
+/* =========================================
+   Responsive Adjustments (Optional, but good practice)
+   ========================================= */
+@media (max-width: 600px) {
+    .footer {
+        padding: 20px 15px; /* Slightly less padding on smaller screens */
+    }
+
+    .footer-links {
+        flex-direction: column; /* Stack links vertically on very small screens */
+        gap: 10px; /* Reduced gap when stacked */
+    }
+
+    .footer-links a {
+        font-size: 14px; /* Slightly smaller font for links */
+    }
+
+    .footer p {
+        font-size: 13px; /* Slightly smaller font for text */
+    }
+}

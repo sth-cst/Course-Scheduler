@@ -4,6 +4,11 @@ body {
     background: white;
     margin: 0;
     padding: 0 0 20px 0; /* Remove horizontal padding completely */
+
+    /* This is for the footer */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
 }
 
 /* Make red background properly sized with space for overlapping boxes */
@@ -67,6 +72,7 @@ header h1 {
 
 /* Container positioned to create proper spacing */
 .container {
+    flex-grow: 1; /* Allow the container to grow and fill available space */
     max-width: 60%; /* Keep this the same */
     margin: -80px auto 0;
     padding: 0; /* Remove container padding */
@@ -433,6 +439,37 @@ header h1 {
     animation-delay: 0.2s; /* Reduced from 0.4s */
 }
 
+.footer {
+    background-color: #ba0c2f;
+    color: #fff;
+    padding: 25px 20px;
+    text-align: center;
+    width: 100%;
+    margin-top: 50px;
+    box-sizing: border-box;
+}
+
+.footer-links {
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.footer-links a {
+    color: #fff;
+    text-decoration: none;
+    font-size: 15px;
+    transition: color 0.2s ease-in-out;
+}
+
+.footer p {
+    font-size: 14px;
+    margin: 0;
+    color: #bbb;
+}
+
 /* Responsive adjustment for mobile */
 @media (max-width: 768px) {
     .stats-row {
@@ -745,6 +782,7 @@ header h1 {
 #courseSearchResults .view-class-button {
     display: none; /* Hide buttons inside search results */
 }
+
 
 /* Add responsive handling for the images */
 @media (max-width: 1200px) {

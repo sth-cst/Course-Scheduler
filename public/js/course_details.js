@@ -1,4 +1,27 @@
 window.addEventListener('DOMContentLoaded', async () => {
+    // Example function that renders course sections and classes
+    function renderCourseSections(courseData) {
+        const courseSections = document.getElementById('course-sections');
+        courseSections.innerHTML = '';
+
+        courseData.sections.forEach(section => {
+            const sectionDiv = document.createElement('div');
+            sectionDiv.innerHTML = `<h3>${section.section_name}</h3>`;
+
+            section.classes.forEach(cls => {
+                const classDiv = document.createElement('div');
+                // Add credits beside the course name here
+                classDiv.innerHTML = `
+                    <span>${cls.class_name} (${cls.class_number})</span>
+                    <span style="margin-left: 10px; color: #888;">Credits: ${cls.credits}</span>
+                `;
+                sectionDiv.appendChild(classDiv);
+            });
+
+            courseSections.appendChild(sectionDiv);
+        });
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const courseId = urlParams.get('course_id');
     const courseInfoDiv = document.getElementById('course-info');
@@ -12,7 +35,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const editCourseModal = document.getElementById('edit-course-modal');
     const editCourseForm = document.getElementById('edit-course-form');
     const editCourseButton = document.getElementById('edit-course-button');
-    const editSectionModal = document.getElementById('edit-section-modal');
+    const editSectionModal = document = document.getElementById('edit-section-modal');
     const editSectionForm = document.getElementById('edit-section-form');
     const editSectionTypeSelect = document.getElementById('edit-section-type');
     const editElectiveOptions = document.getElementById('edit-elective-options');
@@ -257,17 +280,17 @@ window.addEventListener('DOMContentLoaded', async () => {
         
         // Update the HTML to include credits and holokai
         courseInfoDiv.innerHTML = `
-            <h2>${data.course_name}</h2>
-            <h3>${data.course_type || 'N/A'} <span class="course-credits">•   ${totalCredits} Credits</span></h3>
-            ${data.course_type && (data.course_type.toLowerCase() === 'major' || data.course_type.toLowerCase() === 'minor') ? 
-                `<h4>Holokai Section: ${data.holokai || 'None'}</h4>` : ''}
-            <div class="editanddelete">
-                <img id="edit-course-button" src="./assets/whiteedit.png" alt="Edit course">
-                <img id="download-course-button" src="./assets/downloadcourse.png" alt="Download course">
-                <img id="delete-course-button" src="./assets/whitedelete.png" alt="Delete course">
-                <img id="copy-course-button" src="./assets/copy-button.png" alt="Duplicate course">
-            </div>
-        `;
+        <h2>${data.course_name} <span class="course-credits">•   ${totalCredits} Credits</span></h2>
+        <h3>${data.course_type || 'N/A'}</h3>
+        ${data.course_type && (data.course_type.toLowerCase() === 'major' || data.course_type.toLowerCase() === 'minor') ? 
+            `<h4>Holokai Section: ${data.holokai || 'None'}</h4>` : ''}
+        <div class="editanddelete">
+            <img id="edit-course-button" src="./assets/whiteedit.png" alt="Edit course">
+            <img id="download-course-button" src="./assets/downloadcourse.png" alt="Download course">
+            <img id="delete-course-button" src="./assets/whitedelete.png" alt="Delete course">
+            <img id="copy-course-button" src="./assets/copy-button.png" alt="Duplicate course">
+        </div>
+    `;
 
         // Add this right after setting courseInfoDiv.innerHTML
         const editButton = document.getElementById('edit-course-button');
@@ -312,8 +335,6 @@ window.addEventListener('DOMContentLoaded', async () => {
                 this.classList.toggle('active');
             });
         }
-
-        // Add this right after creating the editButton event listener
         const deleteButton = document.getElementById('delete-course-button');
         if (deleteButton) {
             deleteButton.addEventListener('click', async () => {
@@ -337,9 +358,6 @@ window.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         }
-
-        // Add this right after your deleteButton event listener setup in the displayCourse function
-
         const copyButton = document.getElementById('copy-course-button');
         if (copyButton) {
             copyButton.addEventListener('click', async () => {
@@ -378,7 +396,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
         // Clear the sections div
         courseSectionsDiv.innerHTML = '';
-        
+
+        const isComputerScienceMajor = (data.course_name === "Computer Science" && data.course_type.toLowerCase() === 'major');     
+
         if (data.sections && Array.isArray(data.sections) && data.sections.length > 0) {
             data.sections.forEach((section, index) => {
                 if (section && section.id) {
@@ -392,7 +412,6 @@ window.addEventListener('DOMContentLoaded', async () => {
                     sectionDiv.innerHTML = `
                         <div class="drag-handle"></div>
                         <div class="section-header">
-                            <!-- Your existing header content -->
                             <div class="section-info-container">
                                 <h3 class="section-title">
                                     ${section.section_name}
@@ -409,7 +428,6 @@ window.addEventListener('DOMContentLoaded', async () => {
                             
 
                         </div>
-                        <!-- Rest of your section content -->
                         <ul class="classes-list" id="section-${section.id}-classes"></ul>
                         <div class="section-footer">
                             <div class="section-controls">
@@ -432,20 +450,33 @@ window.addEventListener('DOMContentLoaded', async () => {
                     const sectionClassesList = document.getElementById(`section-${section.id}-classes`);
                     if (section.classes && section.classes.length > 0) {
                         section.classes.forEach(cls => {
+                            let creditsDisplay = `${cls.credits || 0} cr.`; // Default display
+
+                            // Check if it's the Computer Science Major, AND the "Science Requirements" section
+                            if (isComputerScienceMajor && section.section_name === "Science Requirements") {
+                                // Now check for the specific classes that get the +1 credit
+                                if (cls.class_number === "CHEM 101" || cls.class_number === "BIOL 112") {
+                                    const baseCredits = Number(cls.credits || 0); // Ensure it's a number for addition
+                                    creditsDisplay = `(${baseCredits}+1 cr.)`;
+                                }
+                            }
                             const li = document.createElement('li');
                             li.innerHTML = `
-                                ${cls.class_number}: ${cls.class_name}
-                                <div class="class-actions">
-                                    <img class="update-class-button" 
-                                        src="./assets/editclassbutton.png" 
-                                        alt="Edit class"
-                                        data-class-id="${cls.id}" 
-                                        data-section-id="${section.id}">
-                                    <img class="delete-class-button" 
-                                        src="./assets/removebutton.png" 
-                                        alt="Remove class"
-                                        data-class-id="${cls.id}"
-                                        data-section-id="${section.id}">
+                                <span>${cls.class_number}: ${cls.class_name}</span>
+                                <div class="class-right-content">
+                                    <span class="class-credits-display">${creditsDisplay}</span>
+                                    <div class="class-actions-buttons">
+                                        <img class="update-class-button"
+                                            src="./assets/editclassbutton.png"
+                                            alt="Edit class"
+                                            data-class-id="${cls.id}"
+                                            data-section-id="${section.id}">
+                                        <img class="delete-class-button"
+                                            src="./assets/removebutton.png"
+                                            alt="Remove class"
+                                            data-class-id="${cls.id}"
+                                            data-section-id="${section.id}">
+                                    </div>
                                 </div>
                             `;
                             sectionClassesList.appendChild(li);
@@ -695,14 +726,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         const searchInput = searchModal.querySelector('.class-search-input');
         const searchResults = searchModal.querySelector('.search-results');
         const query = searchInput.value.trim();
-        
         console.log('Performing search with query:', query); // Debug log
-        
         if (!query) {
             searchResults.innerHTML = '';
             return;
         }
-
         try {
             const response = await fetch(`/api/classes/search?query=${encodeURIComponent(query)}`);
             console.log('Search response:', response); // Debug log

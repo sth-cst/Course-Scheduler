@@ -66,6 +66,16 @@ body {
     color: white;
     font-size: 1.8em;
     margin-bottom: 0;
+    /* --- for the right alignment --- */
+    display: flex; /* Makes the H2 a flex container */
+    justify-content: space-between; /* Pushes content to opposite ends */
+}
+
+/* Also, locate the existing .course-credits rule and remove its margin-left
+   as space-between will handle the spacing correctly without it */
+.course-credits {
+    color: white;
+    font-size: 0.9em;
 }
 
 #course-info h3 {
@@ -357,7 +367,7 @@ body {
     color: rgba(0, 0, 0, 0.8); /* Changed from rgba(255, 255, 255, 0.8) */
 }
 
-.class-actions {
+.class-actions-buttons {
     display: flex; /* Change from display: none to allow animation */
     opacity: 0;
     visibility: hidden;
@@ -649,6 +659,72 @@ body {
     padding: 8px 0;      /* Add some vertical padding */
     color: black; /* Changed from white */
     border-bottom: 1px solid rgba(0, 0, 0, 0.1); /* Updated border color */
+}
+
+/* New container for the content on the right (credits OR buttons) */
+.classes-list li .class-right-content {
+    position: relative; /* Establishes positioning context for absolute children */
+    /* Define a fixed width to prevent jumping when content switches */
+    /* Adjust this width based on how wide your buttons or credits text can be */
+    width: 100px; /* Example: adjust this width as needed (e.g., 80px - 120px) */
+    height: 24px; /* Ensure enough height for content, match button height */
+    
+    display: flex; /* For centering the content that IS visible */
+    align-items: center;
+    justify-content: center; /* Center visible content horizontally within its space */
+}
+
+/* Style for the credits text (initially visible) */
+.classes-list li .class-credits-display {
+    position: absolute; /* Allows it to overlap with buttons */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Centers it horizontally and vertically */
+    
+    color: #888;
+    font-size: 0.9em;
+    white-space: nowrap; /* Prevents text from wrapping */
+
+    opacity: 1; /* Initially visible */
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+}
+
+/* Style for the buttons container (initially hidden) */
+.classes-list li .class-actions-buttons { /* Renamed from .class-actions */
+    position: absolute; /* Allows it to overlap with credits */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Centers it horizontally and vertically */
+
+    display: flex; /* Keep flex for internal button alignment */
+    align-items: center;
+    gap: 8px; /* Space between buttons */
+
+    opacity: 0; /* Initially hidden */
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+}
+
+/* --- Rules to control visibility when "show-actions" is active --- */
+/* When the parent classes-list has 'show-actions', hide credits and show buttons */
+.classes-list.show-actions .class-credits-display {
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -50%) scale(0.8); /* Shrink slightly as it fades */
+}
+
+.lab-credit-tooltip {
+    font-style: italic;
+    color: #555;
+    cursor: help;
+    text-decoration: dotted underline;
+}
+
+.classes-list.show-actions .class-actions-buttons {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, -50%) scale(1); /* Ensure it's full size */
 }
 
 /* Update the modal buttons to have consistent styling */

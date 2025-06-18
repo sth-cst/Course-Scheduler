@@ -1184,6 +1184,9 @@ button.disabled:hover::after {
 /* Menu bar scaling */
 #menubar {
     height: 60px !important; /* Reduced from 75px */
+    display: flex; /* Ensure flexbox is still active */
+    justify-content: space-between; /* Space out logo and undo/redo */
+    align-items: center;
 }
 
 #menubar .icon.left {
@@ -1424,6 +1427,87 @@ button.disabled:hover::after {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* NEW: Styles for undo/redo buttons */
+#undo-redo-controls {
+    position: absolute;
+    right: 20px; /* Aligns to the right of the menubar */
+    top: 50%; /* Vertically centers within menubar */
+    transform: translateY(-50%); /* Fine-tunes vertical centering */
+    display: flex;
+    gap: 10px;
+    z-index: 20; /* Ensure it's above other elements if needed */
+}
+
+#undo-redo-controls.hidden {
+    display: none !important;
+}
+
+.action-button {
+    padding: 6px 12px;
+    background-color: #f0f0f0; /* Light background */
+    color: #333; /* Darker text */
+    border: 1px solid #ccc;
+    border-radius: 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.action-button:hover:not(:disabled) {
+    background-color: #e0e0e0;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.action-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f8f8f8;
+}
+
+/* NEW: Footer Styles */
+.footer { 
+    background-color: #ba0c2f; /* Dark background for footer */
+    color: #fff; /* White text */
+    padding: 25px 20px;
+    text-align: center;
+    width: 100%;
+    margin-top: 50px; /* Space above the footer */
+    box-sizing: border-box;
+}
+
+.footer-links {
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap; /* Allow links to wrap on smaller screens */
+    gap: 20px; /* Space between links */
+}
+
+.footer-links a {
+    color: #fff;
+    text-decoration: none;
+    font-size: 15px;
+    transition: color 0.2s ease-in-out;
+}
+
+.footer p { /* Changed from #main-footer p to .footer p */
+    font-size: 14px;
+    margin: 0;
+    color: #bbb;
+}
+
+/* Ensure the main content pushes the footer down */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.background-image { /* This wraps most of your content */
+    flex-grow: 1; /* Allows it to take up available space */
+}
+
 
 /* RESPONSIVE STYLES */
 
@@ -1818,7 +1902,3 @@ button.disabled:hover::after {
     background-color: rgba(0, 0, 0, 0.05);
     color: #333;
 }
-
-
-
-
