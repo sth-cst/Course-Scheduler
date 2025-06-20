@@ -15,7 +15,9 @@ class Course:
     is_elective: bool
     section_id: int
     credits_needed: int = None
-    course_type: str = ""  # Add course_type field
+    course_type: str = ""  # Already present
+    course_id: str = ""    # Add this
+    is_elective_section: bool = False  # Add this
 
 @dataclass
 class Semester:
@@ -121,7 +123,9 @@ class ScheduleOptimizer:
                 is_elective=data.get("is_elective", False),
                 section_id=data["section_id"],
                 credits_needed=data.get("credits_needed"),
-                course_type=data.get("course_type", "")
+                course_type=data.get("course_type", ""),
+                course_id=str(data.get("course_id", "")),  # Add this
+                is_elective_section=data.get("is_elective_section", False)  # Add this
             )
             courses.append(course)
         return courses
@@ -214,6 +218,11 @@ class ScheduleOptimizer:
         eil_courses = {"STDEV 100R", "EIL 201", "EIL 313", "EIL 317", "EIL 320"}
         return course.class_number in eil_courses
 
+    def _is_eil_course_dict(self, course_dict: Dict) -> bool:
+        """Check if a course dictionary represents an EIL course"""
+        eil_courses = {"STDEV 100R", "EIL 201", "EIL 313", "EIL 317", "EIL 320"}
+        return course_dict.get("class_number") in eil_courses
+
     # Add a method to check if we can schedule a religion class in a semester
     def _can_schedule_religion_in_semester(self, semester_courses: List[Course]) -> bool:
         """Check if a religion class can be scheduled in the semester (max 1 per semester)"""
@@ -253,6 +262,30 @@ class ScheduleOptimizer:
     def create_schedule(self, processed_data: Dict) -> Dict:
         """Create a schedule with integrated EIL and regular courses"""
         try:
+            # Validate input
+            if not processed_data.get("classes"):
+                logger.error("No classes in processed data")
+                return {
+                    "error": "No classes to schedule",
+                    "metadata": {
+                        "success": False,
+                        "message": "No classes provided for scheduling"
+                    }
+                }
+                
+            if not processed_data.get("parameters"):
+                logger.error("No parameters in processed data")
+                return {
+                    "error": "Missing scheduling parameters",
+                    "metadata": {
+                        "success": False,
+                        "message": "No scheduling parameters provided"
+                    }
+                }
+                
+            # Add logging for schedule generation
+            logger.info(f"Starting schedule creation with {len(processed_data['classes'])} classes")
+            
             # Initialize tracking sets
             self.satisfied_sections = set()
             scheduled_course_ids = set()
@@ -551,13 +584,12 @@ class ScheduleOptimizer:
                 "schedule": scheduled_semesters
             }
         except Exception as e:
-            logger.error(f"Error creating schedule: {str(e)}")
+            logger.error(f"Error in schedule creation: {str(e)}")
             return {
                 "error": str(e),
                 "metadata": {
-                    "approach": "integrated-scheduling",
-                    "startSemester": params["startSemester"],
-                    "success": False
+                    "success": False,
+                    "message": f"Schedule creation failed: {str(e)}"
                 }
             }
 
@@ -682,7 +714,11 @@ class ScheduleOptimizer:
             "corequisites": course.corequisites,
             "semesters_offered": course.semesters_offered,
             "is_elective": course.is_elective,
-            "course_type": course.course_type  # Add course_type to output
+            "course_type": course.course_type,
+            "course_id": course.course_id,
+            "is_elective_section": course.is_elective_section,
+            "section_id": course.section_id,
+            "credits_needed": course.credits_needed
         }
 
     def _create_next_semester(self, last_semester: Semester, params: Dict) -> Semester:

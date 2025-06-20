@@ -1,6 +1,7 @@
 import json
 from typing import Dict, List, Any, Set, Tuple
 import logging
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,6 +14,27 @@ class ScheduleDataProcessor:
         self.class_info = {}
         
     def process_payload(self, payload: Dict) -> Dict:
+        logger.info("Starting payload processing")
+        
+        # Add validation checks
+        if not payload.get("courseData"):
+            logger.error("Missing courseData in payload")
+            return {"error": "Invalid payload structure"}
+            
+        if not payload.get("preferences"):
+            logger.error("Missing preferences in payload")
+            return {"error": "Invalid payload structure"}
+        
+        # Add detailed logging for dependencies
+        processed_data = self._process_payload_internal(payload)
+        
+        logger.info(f"Processed {len(processed_data['classes'])} classes")
+        logger.info(f"First 3 processed classes: {list(processed_data['classes'].items())[:3]}")
+        
+        return processed_data
+
+    def _process_payload_internal(self, payload: Dict) -> Dict:
+        # Original process_payload logic here
         logger.info("Starting payload processing")
         
         # Log preferences
@@ -76,10 +98,25 @@ class ScheduleDataProcessor:
         
         logger.info(f"Processed scheduling parameters: {json.dumps(scheduling_params, indent=2)}")
         
-        return {
+        # Validate class data before returning
+        for cls_id, cls_info in all_classes.items():
+            required_fields = ["class_name", "credits", "semesters_offered"]
+            for field in required_fields:
+                if field not in cls_info:
+                    logger.error(f"Missing required field {field} in class {cls_id}")
+                    return {"error": f"Invalid class data: missing {field}"}
+        
+        # Add metadata to processed data
+        processed_data = {
             "classes": all_classes,
-            "parameters": scheduling_params
+            "parameters": scheduling_params,
+            "metadata": {
+                "total_classes": len(all_classes),
+                "processing_timestamp": datetime.now().isoformat()
+            }
         }
+        
+        return processed_data
     
     def _process_additional_classes(self, course: Dict, all_classes: Dict):
         """Process classes from the additional section"""
