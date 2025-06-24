@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from constraint_optimizer import ScheduleOptimizer
+from semester_based_optimizer import SemesterBasedOptimizer  # Add this import
 from data_processor import ScheduleDataProcessor
 import os
 from datetime import datetime
@@ -23,7 +24,6 @@ CORS(app, resources={
     }
 })
 
-optimizer = ScheduleOptimizer()
 data_processor = ScheduleDataProcessor()
 
 # Configure logging
@@ -67,13 +67,35 @@ def generate_schedule():
         processed_data = processor.process_payload(data)
         logger.info(f"Processed data complete with {len(processed_data['classes'])} courses")
         
+        # Check if processing was successful
+        if "error" in processed_data:
+            logger.error(f"Data processing failed: {processed_data['error']}")
+            return jsonify(processed_data), 400
+        
+        # Determine which optimizer to use based on approach
+        approach = processed_data["parameters"].get("approach", "credits-based")
+        logger.info(f"Using scheduling approach: {approach}")
+        
+        if approach == "semesters-based":
+            # Use the new semester-based optimizer
+            optimizer = SemesterBasedOptimizer()
+            logger.info("Using SemesterBasedOptimizer")
+        else:
+            # Use the existing constraint optimizer for credits-based
+            optimizer = ScheduleOptimizer()
+            logger.info("Using ScheduleOptimizer (credits-based)")
+        
         # Generate the schedule
-        optimizer = ScheduleOptimizer()
         schedule_result = optimizer.create_schedule(processed_data)
         
         # Log the result
         logger.info(f"Schedule generation complete with {len(schedule_result.get('schedule', []))} semesters")
         logger.info(f"Schedule metadata: {schedule_result.get('metadata', {})}")
+        
+        # Check if schedule generation was successful
+        if "error" in schedule_result:
+            logger.error(f"Schedule generation failed: {schedule_result['error']}")
+            return jsonify(schedule_result), 500
         
         return jsonify({
             "metadata": schedule_result.get('metadata', {}),
@@ -172,22 +194,21 @@ def test_optimizer():
         processor = ScheduleDataProcessor()
         processed_data = processor.process_payload(data)
         
-        # Initialize optimizer
-        optimizer = ScheduleOptimizer()
+        # Determine approach and test appropriate optimizer
+        approach = processed_data["parameters"].get("approach", "credits-based")
         
-        # Test constraint checking
-        logger.info("Testing constraint validation...")
-        optimizer._validate_parameters(processed_data['parameters'])
+        if approach == "semesters-based":
+            optimizer = SemesterBasedOptimizer()
+        else:
+            optimizer = ScheduleOptimizer()
         
-        # Test course sorting
-        courses = [Course(**c) for c in processed_data['classes'].values()]
-        sorted_courses = optimizer._sort_courses_by_prerequisites(courses)
+        logger.info(f"Testing {approach} optimizer...")
         
         return jsonify({
             "status": "success",
+            "approach": approach,
             "processed_data": processed_data,
-            "course_count": len(sorted_courses),
-            "first_course": sorted_courses[0].class_number if sorted_courses else None,
+            "course_count": len(processed_data.get('classes', {})),
             "timestamp": str(datetime.now())
         })
     except Exception as e:
