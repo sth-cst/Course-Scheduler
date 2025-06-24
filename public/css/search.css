@@ -56,7 +56,7 @@ body {
 /* Take header out of normal document flow and position it precisely */
 header {
     position: absolute;
-    top: -70px; /* Adjust this value to move up/down - the smaller, the higher */
+    top: -150px; /* Adjust this value to move up/down - the smaller, the higher */
     left: 0;
     right: 0;
     text-align: left; /* Center the header text */

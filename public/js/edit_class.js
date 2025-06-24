@@ -158,6 +158,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         // Populate new fields - description and restrictions
         document.getElementById('class-description').value = classData.description || '';
         document.getElementById('class-restrictions').value = classData.restrictions || '';
+        document.getElementById('class-link').value = classData.link || ''; // <-- ADDED
 
         // Populate is-senior-class checkbox if present
         const isSeniorCheckbox = document.getElementById('is-senior-class');
@@ -220,6 +221,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         const description = document.getElementById('class-description').value.trim();
         const restrictions = document.getElementById('class-restrictions').value;
         const isSeniorClass = document.getElementById('is-senior-class').checked;
+        const link = document.getElementById('class-link').value.trim(); // <-- ADDED
 
         if (!classNumber || !className || isNaN(credits)) {
             messageDiv.innerHTML = '<p style="color: red;">Please fill in all required fields.</p>';
@@ -237,7 +239,8 @@ window.addEventListener('DOMContentLoaded', async () => {
             times_offered: timesOffered ? timesOffered.split(',').map(t => t.trim()) : [],
             is_senior_class: isSeniorClass,
             restrictions: restrictions,
-            description: description
+            description: description,
+            link: link // <-- ADDED
         };
 
         try {

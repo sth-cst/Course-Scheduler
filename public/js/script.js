@@ -1773,8 +1773,16 @@ function showClassDetails(classData) {
         </div>
         
         <div class="details-section">
-            <h3>Corequisites</h3>
+            <h3>Co-requisites</h3>
             <p>${corequisites}</p>
+        </div>
+        <div class="details-section">
+            <h3>Instructor</h3>
+            <p>${classData.professor || 'Not assigned'}</p>
+        </div>
+        <div class="details-section">
+            <h3>Link to Class</h3>
+            <p>${classData.link || 'No link available.'}</p>
         </div>
     `;
 

@@ -717,3 +717,13 @@ header::before {
         padding: 20px;
     }
 }
+
+/* Add this new rule to the end of your CSS file to style the link input field */
+form input[type="url"] {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
