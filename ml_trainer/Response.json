@@ -1,8 +1,8 @@
 {
     "metadata": {
-        "message": "Schedule creation failed: 'ScheduleOptimizer' object has no attribute '_is_eil_course_dict'",
+        "message": "Schedule creation failed: Target semesters not specified for semester-based scheduling",
         "success": false
     },
     "schedule": [],
-    "timestamp": "2025-06-20 21:03:32.038102"
+    "timestamp": "2025-06-23 22:13:31.879433"
 }

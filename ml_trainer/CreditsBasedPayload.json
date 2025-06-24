@@ -1440,13 +1440,14 @@
     ],
     "preferences": {
         "startSemester": "Winter 2025",
-        "targetSemesters": 11,
         "majorClassLimit": 4,
-        "approach": "semesters-based",
+        "fallWinterCredits": 16,
+        "springCredits": 10,
+        "approach": "credits-based",
         "limitFirstYear": true,
         "firstYearLimits": {
-            "fallWinterCredits": 17,
-            "springCredits": 9
+            "fallWinterCredits": 15,
+            "springCredits": 10
         }
     }
 }

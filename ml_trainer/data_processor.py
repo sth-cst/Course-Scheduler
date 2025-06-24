@@ -83,20 +83,29 @@ class ScheduleDataProcessor:
         self._map_class_dependencies(all_classes)
         
         # Extract scheduling approach and parameters
-        scheduling_approach = preferences.get("approach")
-        start_semester = preferences.get("startSemester")
-        
         scheduling_params = {
-            "approach": scheduling_approach,
-            "startSemester": start_semester,
+            "approach": preferences.get("approach"),
+            "startSemester": preferences.get("startSemester"),
             "fallWinterCredits": preferences.get("fallWinterCredits", 15),
             "springCredits": preferences.get("springCredits", 10),
             "majorClassLimit": preferences.get("majorClassLimit", 3),
             "firstYearLimits": first_year_limits,
-            "limitFirstYear": preferences.get("limitFirstYear", False)
+            "limitFirstYear": preferences.get("limitFirstYear", False),
+            "targetSemesters": preferences.get("targetSemesters")
         }
         
         logger.info(f"Processed scheduling parameters: {json.dumps(scheduling_params, indent=2)}")
+        
+        # Add validation for semester-based approach
+        if scheduling_params["approach"] == "semesters-based" and not scheduling_params["targetSemesters"]:
+            logger.error("Target semesters not specified for semester-based scheduling")
+            return {
+                "error": "Missing targetSemesters parameter for semester-based scheduling",
+                "metadata": {
+                    "success": False,
+                    "message": "Target semesters must be specified for semester-based scheduling"
+                }
+            }
         
         # Validate class data before returning
         for cls_id, cls_info in all_classes.items():

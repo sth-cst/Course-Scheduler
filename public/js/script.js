@@ -796,6 +796,18 @@ function renderSchedule(schedule) {
     scheduleContainer.classList.remove('hidden');
     scheduleContainer.innerHTML = '';
 
+    // Check if schedule is empty or invalid
+    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
+        scheduleContainer.innerHTML = `
+            <div class="error-message">
+                <h3>Unable to Generate Schedule</h3>
+                <p>Could not create a valid schedule with the given requirements.</p>
+                <p>Try adjusting your course selections or credit limits.</p>
+            </div>
+        `;
+        return;
+    }
+
     // Create and add summary box
     const summaryBox = createSummaryBox(schedule);
     scheduleContainer.appendChild(summaryBox);
@@ -873,6 +885,18 @@ function renderSchedule(schedule) {
 
 // Helper function to create summary box
 function createSummaryBox(schedule) {
+    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
+        const emptyBox = document.createElement('div');
+        emptyBox.className = 'summary-box';
+        emptyBox.innerHTML = `
+            <div class="summary-item animated-box">
+                <p>No Schedule Generated</p>
+                <h2>-</h2>
+            </div>
+        `;
+        return emptyBox;
+    }
+
     const summaryBox = document.createElement('div');
     summaryBox.className = 'summary-box';
     summaryBox.id = 'summary';
@@ -1129,44 +1153,49 @@ async function generateScheduleFromSemesters(event) {
   event.preventDefault();
   console.log("Generating schedule by number of semesters...");
   
-  // Show loading indicator
-  showLoadingIndicator();
-  const generateButton = document.getElementById("calculate-schedule-sem");
-  generateButton.textContent = "Generating...";
-  generateButton.disabled = true;
-  
   try {
-    // Get selected values from the semesters-based form
-    const selectedMajor = Number(document.getElementById("selectedMajor-sem").value);
-    const selectedMinor1 = Number(document.getElementById("selectedMinor1-sem").value);
-    const selectedMinor2 = Number(document.getElementById("selectedMinor2-sem").value);
-    const englishLevel = document.getElementById("english-level-sem").value;
-    
-    // Fetch detailed course data
+    // Get all required form elements
+    const formElements = {
+      selectedMajor: document.getElementById("selectedMajor-sem"),
+      selectedMinor1: document.getElementById("selectedMinor1-sem"),
+      selectedMinor2: document.getElementById("selectedMinor2-sem"),
+      englishLevel: document.getElementById("english-level-sem"),
+      startSemester: document.getElementById("start-semester-sem"),
+      totalSemesters: document.getElementById("total-semesters"),
+      majorClassLimit: document.getElementById("major-class-limit-sem")
+    };
+
+    // Check if any elements are missing
+    const missingElements = Object.entries(formElements)
+      .filter(([key, element]) => !element)
+      .map(([key]) => key);
+
+    if (missingElements.length > 0) {
+      throw new Error(`Missing form elements: ${missingElements.join(', ')}`);
+    }
+
+    showLoadingIndicator();
+    const generateButton = document.getElementById("calculate-schedule-sem");
+    generateButton.textContent = "Generating...";
+    generateButton.disabled = true;
+
+    // Now safely get values from form elements
     const courseData = await fetchRequiredCourseData(
-      selectedMajor, 
-      selectedMinor1, 
-      selectedMinor2, 
-      englishLevel
+      Number(formElements.selectedMajor.value),
+      Number(formElements.selectedMinor1.value),
+      Number(formElements.selectedMinor2.value),
+      formElements.englishLevel.value
     );
-    
-    // Get other settings
-    const startSemester = document.getElementById("start-semester-sem").value;
-    const targetSemesters = parseInt(document.getElementById("total-semesters").value);
-    const majorClassLimit = parseInt(document.getElementById("major-class-limit-sem").value, 10); // ADD THIS LINE
-    
-    // Prepare preferences object
+
     const preferences = {
-      startSemester,
-      targetSemesters,
-      majorClassLimit, // ADD THIS LINE
+      startSemester: formElements.startSemester.value,
+      targetSemesters: parseInt(formElements.totalSemesters.value),
+      majorClassLimit: parseInt(formElements.majorClassLimit.value),
       approach: "semesters-based"
     };
-    
-    // Check if first year credits are limited
-    const limitFirstYear = document.getElementById("limit-first-year-sem").checked;
-    
+
     // Add first year limits if that option is checked
+    const limitFirstYear = document.getElementById("limit-first-year-sem").checked;
     if (limitFirstYear) {
       preferences.limitFirstYear = true;
       preferences.firstYearLimits = {
@@ -1174,59 +1203,50 @@ async function generateScheduleFromSemesters(event) {
         springCredits: parseInt(sessionStorage.getItem('firstYearSpringCredits') || 10)
       };
     }
-    
-    // Prepare the complete data package for the AI scheduler
-    const schedulerData = {
+
+    // Prepare the complete payload
+    const payload = {
       courseData: courseData,
       preferences: preferences
     };
-    
-    console.log("Sending data to AI scheduler:", schedulerData);
-  
-    // Send request to generate schedule
+
+    console.log("Sending semester-based payload:", payload);
+
+    // Send request with timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     const response = await fetch('/api/generate-schedule', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(schedulerData)
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
-    
-    // Debug: Log the raw response
-    console.log("Response status:", response.status);
-    
+
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error("API error response:", errorText);
-      throw new Error(`API returned status: ${response.status}`);
+      
+      if (errorText.includes('timeout')) {
+        throw new Error("Schedule generation is taking longer than expected. Please try again with fewer courses or simpler requirements.");
+      } else if (response.status === 500) {
+        throw new Error("The schedule generator is currently unavailable. Please try again in a few minutes.");
+      }
+      throw new Error(`Server error: ${response.status}`);
     }
-    
-    // Get the JSON data
+
     const result = await response.json();
     console.log("Schedule data received:", result);
-    
-    // Check if we have the expected data structure
+
     if (!result.schedule || !Array.isArray(result.schedule)) {
-      console.error("Invalid schedule format:", result);
-      alert("Received invalid schedule data. Check console for details.");
-      hideLoadingIndicator();
-      return;
+      throw new Error("Invalid schedule format received");
     }
-    
-    // Make sure schedule container exists
-    const scheduleContainer = document.getElementById('schedule-container');
-    if (!scheduleContainer) {
-      console.error("Schedule container not found in DOM!");
-      alert("Cannot display schedule: container element not found.");
-      hideLoadingIndicator();
-      return;
-    }
-    
-    console.log("About to render semester-based schedule with", result.schedule.length, "semesters");
-    
+
     // Render the schedule
     renderSchedule(result.schedule);
-    
+
     // Add metadata if available
     if (result.metadata) {
       const metadataContainer = document.createElement('div');
@@ -1234,17 +1254,18 @@ async function generateScheduleFromSemesters(event) {
       metadataContainer.innerHTML = `
         <h3>Schedule Quality: ${Math.round(result.metadata.score * 100)}%</h3>
         <div class="improvements">
-          ${result.metadata.improvements.map(imp => `<p>• ${imp}</p>`).join('')}
+          ${result.metadata.improvements ? result.metadata.improvements.map(imp => `<p>• ${imp}</p>`).join('') : ''}
         </div>
       `;
-      scheduleContainer.appendChild(metadataContainer);
+      document.getElementById('schedule-container').appendChild(metadataContainer);
     }
-    
+
   } catch (error) {
     console.error("Error generating schedule:", error);
-    alert("There was an error generating your schedule. Please try again.");
+    alert("Failed to generate schedule: " + error.message);
   } finally {
     // Reset button and hide loading indicator
+    const generateButton = document.getElementById("calculate-schedule-sem");
     generateButton.textContent = "Generate Schedule";
     generateButton.disabled = false;
     hideLoadingIndicator();

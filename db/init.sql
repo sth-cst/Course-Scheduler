@@ -55,3 +55,12 @@ CREATE TABLE IF NOT EXISTS classes_in_course (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(course_id, class_id)
 );
+
+CREATE TABLE  IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    university_id VARCHAR(50),
+    user_type VARCHAR(50) NOT NULL
+);
