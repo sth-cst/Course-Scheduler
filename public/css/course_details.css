@@ -13,8 +13,6 @@ body {
     box-sizing: border-box;
 }
 
-
-
 /* Update back-link alignment */
 .back-link {
     display: block;
@@ -76,6 +74,7 @@ body {
 .course-credits {
     color: white;
     font-size: 0.9em;
+    /* Removed: margin-left: 10px; */
 }
 
 #course-info h3 {
@@ -116,7 +115,7 @@ body {
 /* Keep the rest of body-card transparent */
 .body-card {
     position: relative;
-    background-color: rgba(216, 216, 216, 0.305); /* Increased from 0.08 */ /* Increased from 0.08 */
+    background-color: rgba(216, 216, 216, 0.305); /* Increased from 0.08 */
     border-radius: 15px;
     padding: 20px;
     width: 90%;
@@ -181,8 +180,6 @@ body {
     font-size: 16px;
 }
 
-
-
 .custom-button {
     display: inline-flex;
     align-items: center;
@@ -227,13 +224,10 @@ body {
 
 /* Existing delete button styles also apply */
 
-
-
-
 /* Update course sections for glass effect */
 .course-section {
     position: relative;
-    background-color: rgb(255, 255, 255); /* Increased from 0.1 */ /* Increased from 0.1 */
+    background-color: rgb(255, 255, 255); /* Increased from 0.1 */
     width: 95%;
     max-width: 1100px;
     border-radius: 5px;
@@ -529,33 +523,15 @@ body {
     cursor: pointer;
 }
 
-.section-header {
+.modal-buttons button:hover {
+    opacity: 0.9;
+}
+
+.modal-buttons {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #e9ecef;
-}
-
-.section-info-container {
-    flex-grow: 1;
-}
-
-/* Position the delete button in the upper right corner of the section */
-.delete-section-button {
-    position: static; /* Change from absolute */
-    background-color: #ba0c2f;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 5px 10px;
-    margin: 0; /* Remove margin-top */
-    cursor: pointer;
-}
-
-.delete-section-button:hover {
-    background-color: #b38212;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
 }
 
 /* Add to your existing CSS */
@@ -661,41 +637,55 @@ body {
     border-bottom: 1px solid rgba(0, 0, 0, 0.1); /* Updated border color */
 }
 
+/* Add this class for clickable items to provide visual feedback */
+.class-item-clickable {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.class-item-clickable:hover {
+    background-color: #f0f0f0; /* Light highlight on hover */
+}
+
 /* New container for the content on the right (credits OR buttons) */
 .classes-list li .class-right-content {
-    position: relative; /* Establishes positioning context for absolute children */
-    /* Define a fixed width to prevent jumping when content switches */
-    /* Adjust this width based on how wide your buttons or credits text can be */
-    width: 100px; /* Example: adjust this width as needed (e.g., 80px - 120px) */
-    height: 24px; /* Ensure enough height for content, match button height */
+    /* No longer relative positioning for children within this context */
+    /* REMOVED: position: relative; */
+
+    /* Ensure enough space is reserved for the content on the right */
+    /* Adjust this min-width as needed to prevent overflow for your longest text/buttons */
+    min-width: 200px; /* Increased from 100px to give more space, adjust as needed */
     
-    display: flex; /* For centering the content that IS visible */
-    align-items: center;
-    justify-content: center; /* Center visible content horizontally within its space */
+    /* Keep flex for internal alignment of the visible child */
+    display: flex;
+    align-items: center; /* Vertically center its child */
+    justify-content: flex-end; /* Pushes the child (credits or buttons) to the right */
+
+    /* No fixed height here, let content dictate height */
+    /* REMOVED: height: 24px; */
 }
 
 /* Style for the credits text (initially visible) */
 .classes-list li .class-credits-display {
-    position: absolute; /* Allows it to overlap with buttons */
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%); /* Centers it horizontally and vertically */
+    /* No longer absolutely positioned */
+    /* REMOVED: position: absolute; top: 50%; right: 0; transform: translateY(-50%); */
     
     color: #888;
     font-size: 0.9em;
-    white-space: nowrap; /* Prevents text from wrapping */
+    white-space: normal; /* Allow text to wrap if it's too long */
+    text-align: right; /* Ensure text aligns to the right within its space */
 
     opacity: 1; /* Initially visible */
     visibility: visible;
+    
+    /* Transitions for visibility switch */
     transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
 }
 
 /* Style for the buttons container (initially hidden) */
 .classes-list li .class-actions-buttons { /* Renamed from .class-actions */
-    position: absolute; /* Allows it to overlap with credits */
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%); /* Centers it horizontally and vertically */
+    /* No longer absolutely positioned */
+    /* REMOVED: position: absolute; top: 50%; right: 0; transform: translateY(-50%); */
 
     display: flex; /* Keep flex for internal button alignment */
     align-items: center;
@@ -703,6 +693,8 @@ body {
 
     opacity: 0; /* Initially hidden */
     visibility: hidden;
+    
+    /* Transitions for visibility switch */
     transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
 }
 
@@ -711,7 +703,7 @@ body {
 .classes-list.show-actions .class-credits-display {
     opacity: 0;
     visibility: hidden;
-    transform: translate(-50%, -50%) scale(0.8); /* Shrink slightly as it fades */
+    transform: scale(0.8); /* Shrink slightly as it fades */
 }
 
 .lab-credit-tooltip {
@@ -724,40 +716,7 @@ body {
 .classes-list.show-actions .class-actions-buttons {
     opacity: 1;
     visibility: visible;
-    transform: translate(-50%, -50%) scale(1); /* Ensure it's full size */
-}
-
-/* Update the modal buttons to have consistent styling */
-.modal-buttons button[type="submit"],
-#save-edit-course {
-    background-color: #61c614;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-    cursor: pointer;
-}
-
-.modal-buttons button[type="button"],
-#cancel-edit-course,
-#cancel-section {
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-    cursor: pointer;
-}
-
-.modal-buttons button:hover {
-    opacity: 0.9;
-}
-
-.modal-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
+    transform: scale(1); /* Ensure it's full size */
 }
 
 /* Add this to your CSS file */
@@ -818,14 +777,10 @@ body {
     border-radius: 4px;
 }
 
-
-
 /* Add active state styling for edit button */
 #edit-course-button{
     background-color: rgba(0, 0, 0, 0.05);
 }
-
-
 
 /* Hide section edit icon by default and show only when the section is active */
 .section-icon {
@@ -837,8 +792,93 @@ body {
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-.course-credits {
-    color: white;
-    margin-left: 10px;
+/* Class Details Popup Styles */
+.class-details-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
+    z-index: 10000; /* Higher z-index to ensure it's on top */
+    width: 90%;
+    max-width: 500px;
+}
+
+.class-details-popup .popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.class-details-popup h2 {
+    margin: 0 30px 20px 0; /* Add right margin to prevent overlap with close button */
+    color: #333;
+    word-wrap: break-word; /* Allow long titles to wrap */
+}
+
+.class-details-popup .details-section {
+    margin-bottom: 15px;
+}
+
+.class-details-popup .details-section h3 {
+    color: #666;
     font-size: 0.9em;
+    margin: 0 0 5px 0;
+}
+
+.class-details-popup .details-section p {
+    margin: 0;
+    color: #333;
+}
+
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999; /* Just below the popup */
+}
+
+.class-details-popup .close-button {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 8px;
+    line-height: 1;
+    width: 40px; /* Set fixed width */
+    height: 40px; /* Set fixed height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+/* Add hover effect for better UX */
+.class-details-popup .close-button:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+/* Add these styles for the link in the class details popup */
+.class-details-popup .details-section p a {
+    color: #ba0c2f; /* Match your theme's primary red */
+    text-decoration: underline;
+    word-break: break-all; /* Prevents long URLs from overflowing the popup */
+    transition: color 0.2s ease;
+}
+
+.class-details-popup .details-section p a:hover {
+    color: #a00b29; /* A slightly darker red for the hover effect */
 }

@@ -635,6 +635,9 @@ router.put('/classes/:class_id', async (req, res) => {
                     is_senior_class = $9,
                     restrictions = $10,
                     description = $11,
+                    restrictions = $12,
+                    teachers = $13,
+                    link = $14,
                     updated_at = NOW()
                 WHERE id = $12
                 RETURNING id, class_number, class_name, semesters_offered,
@@ -653,6 +656,9 @@ router.put('/classes/:class_id', async (req, res) => {
                 is_senior_class,
                 restrictions,
                 description,
+                restrictions,
+                teachers,
+                link,
                 classIdNum
             ]);
 
@@ -662,7 +668,7 @@ router.put('/classes/:class_id', async (req, res) => {
 
             // Fetch full prerequisite details
             const prereqQuery = `
-                SELECT id, class_number, class_name
+                SELECT id, class_number, class_name, link
                 FROM classes
                 WHERE id = ANY($1::int[])
             `;
@@ -1567,91 +1573,22 @@ router.post('/courses/:course_id/sections/:section_id/classes', async (req, res)
         res.status(400).json({ error: error.message || 'Internal Server Error' });
     }
 });
+
 /**
- * @route   PUT /courses/:course_id/classes/:class_id
- * @desc    Update a class that's associated with a course
- * @access  Public
- */
-router.put('/courses/:course_id/classes/:class_id', async (req, res) => {
-    try {
-        const { course_id, class_id } = req.params;
-        const courseIdNum = parseInt(course_id, 10);
-        const classIdNum = parseInt(class_id, 10);
-
-        if (isNaN(courseIdNum) || isNaN(classIdNum)) {
-            return res.status(400).json({ 
-                error: 'course_id and class_id must be valid integers.' 
-            });
-        }
-
-        const {
-            class_number,
-            class_name,
-            semesters_offered = [],
-            prerequisites = [],
-            corequisites = [],
-            credits = 0,
-            days_offered = [],
-            times_offered = null,
-            is_senior_class = false,
-            restrictions = null,
-            description = null
-        } = req.body;
-
-        if (!class_number || !class_name) {
-            return res.status(400).json({ 
-                error: 'class_number and class_name are required.' 
-            });
-        }
-
-        await pool.query('BEGIN');
-
+ * @route   PUT /courses/:course_id/classes/:class_id
+ * @desc    Update a class that's associated with a course
+ * @access  Public
+ */
+router.put('/classes/:class_id', async (req, res) => {
         try {
-            // Validate prerequisites and corequisites exist
-            if (prerequisites.length > 0 || corequisites.length > 0) {
-                const allIds = [...new Set([...prerequisites, ...corequisites])];
-                const checkQuery = `
-                    SELECT id FROM classes 
-                    WHERE id = ANY($1::int[])
-                `;
-                const { rows: existingClasses } = await pool.query(checkQuery, [allIds]);
-                
-                if (existingClasses.length !== allIds.length) {
-                    throw new Error('One or more prerequisites or corequisites do not exist');
-                }
+            const { class_id } = req.params;
+            const classIdNum = parseInt(class_id, 10);
+    
+            if (isNaN(classIdNum)) {
+                return res.status(400).json({ error: 'class_id must be a valid integer.' });
             }
-
-            // Verify class belongs to course
-            const verifyQuery = `
-                SELECT 1 FROM classes_in_course 
-                WHERE course_id = $1 AND class_id = $2
-            `;
-            const { rows: verifyRows } = await pool.query(verifyQuery, [courseIdNum, classIdNum]);
-            if (verifyRows.length === 0) {
-                throw new Error('Class not found in this course');
-            }
-
-            const updateQuery = `
-                UPDATE classes
-                SET
-                    class_number = $1,
-                    class_name = $2,
-                    semesters_offered = $3,
-                    prerequisites = $4,
-                    corequisites = $5,
-                    credits = $6,
-                    days_offered = $7,
-                    times_offered = $8,
-                    is_senior_class = $9,
-                    restrictions = $10,
-                    description = $11,
-                    updated_at = NOW()
-                WHERE id = $12
-                RETURNING id, class_number, class_name, semesters_offered,
-                    prerequisites, corequisites, credits, days_offered, times_offered, is_senior_class, restrictions, description
-            `;
-
-            const { rows: [updatedClass] } = await pool.query(updateQuery, [
+    
+            const {
                 class_number,
                 class_name,
                 semesters_offered,
@@ -1663,46 +1600,72 @@ router.put('/courses/:course_id/classes/:class_id', async (req, res) => {
                 is_senior_class,
                 restrictions,
                 description,
-                classIdNum
-            ]);
-
-            if (!updatedClass) {
-                throw new Error('Class not found');
+                link
+            } = req.body;
+    
+            if (!class_number || !class_name) {
+                return res.status(400).json({ error: 'class_number and class_name are required.' });
             }
-
-            // Fetch full prerequisite details
-            const prereqQuery = `
-                SELECT id, class_number, class_name
-                FROM classes
-                WHERE id = ANY($1::int[])
-            `;
-            const { rows: prerequisites_details } = prerequisites.length > 0 ?
-                await pool.query(prereqQuery, [prerequisites]) :
-                { rows: [] };
-
-            // Fetch full corequisite details
-            const { rows: corequisites_details } = corequisites.length > 0 ?
-                await pool.query(prereqQuery, [corequisites]) :
-                { rows: [] };
-
-            await pool.query('COMMIT');
-
-            res.json({
-                ...updatedClass,
-                prerequisites: prerequisites_details,
-                corequisites: corequisites_details,
-                message: 'Class updated successfully'
-            });
-
+    
+            await pool.query('BEGIN');
+    
+            try {
+                const updateQuery = `
+                    UPDATE classes
+                    SET
+                        class_number = $1,
+                        class_name = $2,
+                        semesters_offered = $3,
+                        prerequisites = $4,
+                        corequisites = $5,
+                        credits = $6,
+                        days_offered = $7,
+                        times_offered = $8,
+                        is_senior_class = $9,
+                        restrictions = $10,
+                        description = $11,
+                        link = $12,
+                        updated_at = NOW()
+                    WHERE id = $13
+                    RETURNING *
+                `;
+    
+                const { rows: [updatedClass] } = await pool.query(updateQuery, [
+                    class_number,
+                    class_name,
+                    semesters_offered,
+                    prerequisites,
+                    corequisites,
+                    credits,
+                    days_offered,
+                    times_offered,
+                    is_senior_class,
+                    restrictions,
+                    description,
+                    link,
+                    classIdNum
+                ]);
+    
+                if (!updatedClass) {
+                    throw new Error('Class not found');
+                }
+    
+                await pool.query('COMMIT');
+    
+                res.json({
+                    ...updatedClass,
+                    message: 'Class updated successfully'
+                });
+    
+            } catch (error) {
+                await pool.query('ROLLBACK');
+                throw error;
+            }
         } catch (error) {
-            await pool.query('ROLLBACK');
-            throw error;
+            console.error('Error updating class:', error);
+            res.status(500).json({ error: error.message });
         }
-    } catch (error) {
-        console.error('Error updating class:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+    });
 
 router.get('/stats', async (req, res) => {
     try {
@@ -1808,25 +1771,26 @@ router.delete('/classes/:class_id', async (req, res) => {
 router.put('/courses/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { course_name, course_type, holokai } = req.body;
+        const { course_name, course_type, holokai, link } = req.body; // Add 'link' here
 
         const query = `
             UPDATE courses 
             SET course_name = $1, 
                 course_type = $2,
                 holokai = $3,
+                link = $4, -- Add 'link' to the query
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = $4
+            WHERE id = $5
             RETURNING *
         `;
 
-        const result = await pool.query(query, [course_name, course_type, holokai, id]);
+        const result = await pool.query(query, [course_name, course_type, holokai, link, id]); // Add 'link' to the parameters
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Course not found' });
         }
 
-        res.json(result.rows[0]);
+        res.json(result.rows[0]); // The response will now include the updated 'link'
     } catch (error) {
         console.error('Error updating course:', error);
         res.status(500).json({ error: 'Failed to update course' });
@@ -2066,7 +2030,7 @@ router.post('/courses/:id/duplicate', async (req, res) => {
         res.json({ 
             id: newCourseId, 
             course_name: newCourseName,
-            course_type: originalCourse.course_type
+            course_type: originalCourse.course_type,
         });
         
     } catch (error) {

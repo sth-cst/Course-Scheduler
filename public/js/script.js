@@ -1550,6 +1550,186 @@ async function fetchOrganizedCourseData(majorId, minor1Id, minor2Id, eilLevel) {
       courseData.push(minor1Data);
     }
     
+  } catch (error) {
+    console.error("Error generating schedule:", error);
+    alert("Failed to generate schedule: " + error.message);
+  } finally {
+    hideLoadingIndicator();
+  }
+}
+
+/**
+ * Shows a loading indicator while the schedule is being generated
+ */
+function showLoadingIndicator() {
+  // Check if we already have a loading indicator
+  let loadingIndicator = document.getElementById('loading-indicator');
+  
+  if (!loadingIndicator) {
+    // Create a new loading indicator
+    loadingIndicator = document.createElement('div');
+    loadingIndicator.id = 'loading-indicator';
+    loadingIndicator.className = 'loading-indicator';
+    loadingIndicator.innerHTML = `
+      <div class="spinner"></div>
+      <p>Generating your schedule...</p>
+    `;
+    document.body.appendChild(loadingIndicator);
+  } else {
+    // Show existing indicator
+    loadingIndicator.classList.remove('hidden');
+  }
+}
+
+/**
+ * Hides the loading indicator when schedule generation is complete
+ */
+function hideLoadingIndicator() {
+  const loadingIndicator = document.getElementById('loading-indicator');
+  if (loadingIndicator) {
+    loadingIndicator.classList.add('hidden');
+  }
+}
+
+/**
+ * Builds the schedule payload data for the API
+ */
+async function buildSchedulePayload() {
+  // Get selected course IDs
+  const selectedMajor = Number(document.getElementById("selectedMajor").value);
+  const selectedMinor1 = Number(document.getElementById("selectedMinor1").value);
+  const selectedMinor2 = Number(document.getElementById("selectedMinor2").value);
+  const englishLevel = document.getElementById("english-level").value;
+  
+  // Fetch detailed course data
+  const courseData = await fetchRequiredCourseData(
+    selectedMajor, 
+    selectedMinor1, 
+    selectedMinor2, 
+    englishLevel
+  );
+  
+  // Get other settings
+  const startSemester = document.getElementById("start-semester").value;
+  const majorClassLimit = parseInt(document.getElementById("major-class-limit").value, 10);
+  
+  // Get regular semester credit limits
+  const fallWinterCredits = parseInt(document.getElementById("fall-winter-credits").value, 10);
+  const springCredits = parseInt(document.getElementById("spring-credits").value, 10);
+  
+  // Check if first year credits are limited
+  const limitFirstYear = document.getElementById("limit-first-year-credits").checked;
+  
+  // Prepare preferences object
+  const preferences = {
+    startSemester,
+    majorClassLimit,
+    fallWinterCredits,
+    springCredits,
+    approach: "credits-based"
+  };
+  
+  // Add first year limits if that option is checked
+  if (limitFirstYear) {
+    preferences.limitFirstYear = true;
+    preferences.firstYearLimits = {
+      fallWinterCredits: parseInt(sessionStorage.getItem('firstYearFallWinterCredits') || 15),
+      springCredits: parseInt(sessionStorage.getItem('firstYearSpringCredits') || 10)
+    };
+  }
+  
+  // Prepare the complete data package for the AI scheduler
+  return {
+    courseData: courseData,
+    preferences: preferences
+  };
+}
+
+// Add this new function for showing class details
+function showClassDetails(classData) {
+    // Remove any existing popups
+    const existingPopup = document.querySelector('.class-details-popup');
+    const existingOverlay = document.querySelector('.popup-overlay');
+    if (existingPopup) existingPopup.remove();
+    if (existingOverlay) existingOverlay.remove();
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    document.body.appendChild(overlay);
+
+    // Create popup
+    const popup = document.createElement('div');
+    popup.className = 'class-details-popup';
+
+    // Helper function to get class name from ID or object
+    const getClassName = (item) => {
+        if (typeof item === 'object') {
+            return item.class_number || 'Unknown';
+        }
+        // If it's an ID, look it up in the classesById map
+        return classesById[item]?.class_number || 'Unknown';
+    };
+
+    // Format prerequisites and corequisites with names
+    const prerequisites = Array.isArray(classData.prerequisites) && classData.prerequisites.length > 0
+        ? classData.prerequisites.map(p => getClassName(p)).join(', ')
+        : 'None';
+    
+    const corequisites = Array.isArray(classData.corequisites) && classData.corequisites.length > 0
+        ? classData.corequisites.map(c => getClassName(c)).join(', ')
+        : 'None';
+
+    popup.innerHTML = `
+        <button class="close-button">&times;</button>
+        <h2>${classData.class_number} - ${classData.class_name}</h2>
+        
+        <div class="details-section">
+            <h3>Description</h3>
+            <p>${classData.description || 'No description available.'}</p>
+        </div>
+        
+        <div class="details-section">
+            <h3>Credit Hours</h3>
+            <p>${classData.credits || 3} credits</p>
+        </div>
+        
+        <div class="details-section">
+            <h3>Prerequisites</h3>
+            <p>${prerequisites}</p>
+        </div>
+        
+        <div class="details-section">
+            <h3>Co-requisites</h3>
+            <p>${corequisites}</p>
+        </div>
+        <div class="details-section">
+            <h3>Instructor</h3>
+            <p>${classData.professor || 'Not assigned'}</p>
+        </div>
+        <div class="details-section">
+            <h3>Link to Class</h3>
+            <p>${classData.link || 'No link available.'}</p>
+        </div>
+    `;
+
+    // Add to document
+    document.body.appendChild(popup);
+
+    // Add close handlers
+    const closePopup = () => {
+        popup.remove();
+        overlay.remove();
+    };
+
+    popup.querySelector('.close-button').addEventListener('click', closePopup);
+    overlay.addEventListener('click', closePopup);
+
+    // Stop click event from bubbling to overlay when clicking popup
+    popup.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+}
     if (minor2Id) {
       const minor2Data = await fetchAndMinimizeCourse(minor2Id);
       courseData.push(minor2Data);

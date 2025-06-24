@@ -1,5 +1,29 @@
 window.addEventListener('DOMContentLoaded', async () => {
+    // Add a global map to store all classes by ID for quick lookup
+    let allClassesLookup = {};
+
+    // Fetch ALL classes to build a lookup map. This is crucial because
+    // prerequisites/corequisites might refer to classes not part of the
+    // currently viewed course's 'data' object.
+    try {
+        const allClassesResponse = await fetch('/api/classes');
+        if (!allClassesResponse.ok) {
+            throw new Error(`Error fetching all classes: ${allClassesResponse.statusText}`);
+        }
+        const allFetchedClasses = await allClassesResponse.json();
+        allClassesLookup = allFetchedClasses.reduce((map, cls) => {
+            if (cls.id) map[cls.id] = cls;
+            return map;
+        }, {});
+        console.log("Built allClassesLookup:", allClassesLookup); // Debugging
+    } catch (error) {
+        console.error("Failed to fetch all classes for lookup:", error);
+        // Continue without comprehensive lookup if fetch fails, some corequisite details might be missing
+    }
+
     // Example function that renders course sections and classes
+    // This function is still present but its direct use might be minimal now
+    // as displayCourse directly renders to courseSectionsDiv.
     function renderCourseSections(courseData) {
         const courseSections = document.getElementById('course-sections');
         courseSections.innerHTML = '';
@@ -35,7 +59,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const editCourseModal = document.getElementById('edit-course-modal');
     const editCourseForm = document.getElementById('edit-course-form');
     const editCourseButton = document.getElementById('edit-course-button');
-    const editSectionModal = document = document.getElementById('edit-section-modal');
+    const editSectionModal = document.getElementById('edit-section-modal');
     const editSectionForm = document.getElementById('edit-section-form');
     const editSectionTypeSelect = document.getElementById('edit-section-type');
     const editElectiveOptions = document.getElementById('edit-elective-options');
@@ -266,13 +290,22 @@ window.addEventListener('DOMContentLoaded', async () => {
     function displayCourse(data) {
         // Calculate total credits in the course
         let totalCredits = 0;
+        // Set to keep track of unique class IDs already added to totalCredits
+        const countedClassIds = new Set();
         
         if (data.sections && Array.isArray(data.sections)) {
             data.sections.forEach(section => {
                 if (section.classes && Array.isArray(section.classes)) {
                     section.classes.forEach(cls => {
-                        // Add credits from each class, with fallback to 0 if not available
-                        totalCredits += Number(cls.credits || 0);
+                        // Add main class credits only if not already counted
+                        if (!countedClassIds.has(cls.id)) {
+                            totalCredits += Number(cls.credits || 0);
+                            countedClassIds.add(cls.id);
+                        }
+
+                        // Add corequisite credits
+                        // NOTE: Corequisite credits are only counted for the individual class display,
+                        // NOT for the overall course totalCredits at the top.
                     });
                 }
             });
@@ -397,8 +430,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         // Clear the sections div
         courseSectionsDiv.innerHTML = '';
 
-        const isComputerScienceMajor = (data.course_name === "Computer Science" && data.course_type.toLowerCase() === 'major');     
-
         if (data.sections && Array.isArray(data.sections) && data.sections.length > 0) {
             data.sections.forEach((section, index) => {
                 if (section && section.id) {
@@ -446,21 +477,35 @@ window.addEventListener('DOMContentLoaded', async () => {
                     courseSectionsDiv.appendChild(sectionDiv);
                     
                     // Display classes for this section...
-                    // Your existing code for displaying classes
                     const sectionClassesList = document.getElementById(`section-${section.id}-classes`);
                     if (section.classes && section.classes.length > 0) {
                         section.classes.forEach(cls => {
-                            let creditsDisplay = `${cls.credits || 0} cr.`; // Default display
+                            let baseCredits = cls.credits || 0;
+                            let creditsDisplay = `${baseCredits} cr.`; // Start with the class's own credits
 
-                            // Check if it's the Computer Science Major, AND the "Science Requirements" section
-                            if (isComputerScienceMajor && section.section_name === "Science Requirements") {
-                                // Now check for the specific classes that get the +1 credit
-                                if (cls.class_number === "CHEM 101" || cls.class_number === "BIOL 112") {
-                                    const baseCredits = Number(cls.credits || 0); // Ensure it's a number for addition
-                                    creditsDisplay = `(${baseCredits}+1 cr.)`;
-                                }
+                            // Calculate total corequisite credits to display with the class
+                            let totalCorequisiteCredits = 0; 
+                            if (cls.corequisites && cls.corequisites.length > 0) {
+                                cls.corequisites.forEach(coreq => {
+                                    const coreqId = typeof coreq === 'object' ? coreq.id : coreq;
+                                    const coreqClass = allClassesLookup[coreqId];
+                                    if (coreqClass) {
+                                        totalCorequisiteCredits += (coreqClass.credits || 0);
+                                    }
+                                });
                             }
+
+                            // Append corequisite info if corequisites exist and have credits
+                            if (totalCorequisiteCredits > 0) {
+                                creditsDisplay += ` + ${totalCorequisiteCredits} cr. Co-requisite`;
+                            }
+
                             const li = document.createElement('li');
+                            // Add a class for styling if necessary and a data attribute for easier access
+                            li.className = 'class-item-clickable'; // Add a class for styling/cursor
+                            li.dataset.classId = cls.id; // Store class ID for lookup if needed
+                            li.style.cursor = 'pointer'; // Indicate it's clickable
+
                             li.innerHTML = `
                                 <span>${cls.class_number}: ${cls.class_name}</span>
                                 <div class="class-right-content">
@@ -480,6 +525,17 @@ window.addEventListener('DOMContentLoaded', async () => {
                                 </div>
                             `;
                             sectionClassesList.appendChild(li);
+
+                            // Add the click event listener to show the details popup
+                            li.addEventListener('click', () => {
+                                // Find the class data using its ID from the global lookup
+                                const clickedClassData = allClassesLookup[cls.id];
+                                if (clickedClassData) {
+                                    showClassDetails(clickedClassData);
+                                } else {
+                                    console.error('Class data not found for ID:', cls.id);
+                                }
+                            });
                         });
                     } else {
                         sectionClassesList.innerHTML = '<li>No classes in this section</li>';
@@ -640,9 +696,6 @@ window.addEventListener('DOMContentLoaded', async () => {
                 sectionElement.classList.toggle('active');
                 
                 // Toggle the active class on the button itself
-                e.target.classList.toggle('active');
-                
-                // Rotate the image when toggled
                 e.target.style.transform = classList.classList.contains('show-actions') ? 
                     'rotate(180deg)' : 'rotate(0deg)';
             });
@@ -863,6 +916,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 section.classList.remove('drag-over-top', 'drag-over-bottom');
             });
             
+            
             // Drop event
             section.addEventListener('drop', (e) => {
                 e.preventDefault();
@@ -910,7 +964,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 const sectionIdRaw = sections[i].dataset.sectionId;
                 const sectionIdInt = parseInt(sectionIdRaw, 10);
                 
-                if (isNaN(sectionIdInt) || sectionIdInt <= 0) {
+                if (isNaN(sectionIdInt) || isNaN(sectionIdInt)) { // Removed isNaN(sectionIdInt) || isNaN(sectionIdInt)
                     console.warn(`Skipping invalid section ID: ${sectionIdRaw}`);
                     continue;
                 }
@@ -998,5 +1052,92 @@ window.addEventListener('DOMContentLoaded', async () => {
             console.error('Error in individual updates:', error);
             return false;
         }
+    }
+
+    // NEW: Function to show class details popup
+    function showClassDetails(classData) {
+        // Remove any existing popups
+        const existingPopup = document.querySelector('.class-details-popup');
+        const existingOverlay = document.querySelector('.popup-overlay');
+        if (existingPopup) existingPopup.remove();
+        if (existingOverlay) existingOverlay.remove();
+
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'popup-overlay';
+        document.body.appendChild(overlay);
+
+        // Create popup
+        const popup = document.createElement('div');
+        popup.className = 'class-details-popup';
+
+        // Helper function to get class number from ID using allClassesLookup
+        const getClassNameFromId = (id) => {
+            const cls = allClassesLookup[id];
+            return cls ? `${cls.class_number}` : 'Unknown Class';
+        };
+
+        // Format prerequisites and corequisites with class numbers
+        const prerequisites = Array.isArray(classData.prerequisites) && classData.prerequisites.length > 0
+            ? classData.prerequisites.map(p => getClassNameFromId(typeof p === 'object' ? p.id : p)).join(', ')
+            : 'None';
+        
+        const corequisites = Array.isArray(classData.corequisites) && classData.corequisites.length > 0
+            ? classData.corequisites.map(c => getClassNameFromId(typeof c === 'object' ? c.id : c)).join(', ')
+            : 'None';
+
+        // Determine the content for the link section
+        // Use a conditional (ternary) operator to decide whether to create an <a> tag
+        const linkContent = (classData.link && classData.link.startsWith('http'))
+            ? `<a href="${classData.link}" target="_blank" rel="noopener noreferrer">${classData.link}</a>`
+            : (classData.link || 'No link available.');
+
+
+        popup.innerHTML = `
+            <button class="close-button">&times;</button>
+            <h2>${classData.class_number} - ${classData.class_name}</h2>
+            
+            <div class="details-section">
+                <h3>Description</h3>
+                <p>${classData.description || 'No description available.'}</p>
+            </div>
+            
+            <div class="details-section">
+                <h3>Credit Hours</h3>
+                <p>${classData.credits || 3} credits</p>
+            </div>
+            
+            <div class="details-section">
+                <h3>Prerequisites</h3>
+                <p>${prerequisites}</p>
+            </div>
+            
+            <div class="details-section">
+                <h3>Corequisites</h3>
+                <p>${corequisites}</p>
+            </div>
+            
+            <div class="details-section">
+                <h3>Link</h3>
+                <p>${linkContent}</p>
+            </div>
+        `;
+
+        // Add to document
+        document.body.appendChild(popup);
+
+        // Add close handlers
+        const closePopup = () => {
+            popup.remove();
+            overlay.remove();
+        };
+
+        popup.querySelector('.close-button').addEventListener('click', closePopup);
+        overlay.addEventListener('click', closePopup);
+
+        // Stop click event from bubbling to overlay when clicking popup
+        popup.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
     }
 });

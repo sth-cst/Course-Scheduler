@@ -14,12 +14,10 @@
     </div>
     
     <form id="edit-class-form">
-        <!-- Add the red header section -->
         <div class="form-header">
             <h2>Edit Class</h2>
         </div>
         
-        <!-- First row: Class Number and Class Name -->
         <div class="input-row">
             <div class="input-column">
                 <label for="class-number">Class Number:</label>
@@ -31,7 +29,6 @@
             </div>
         </div>
         
-        <!-- Second row: Credits and Times Offered -->
         <div class="input-row">
             <div class="input-column">
                 <label for="credits">Credits:</label>
@@ -43,13 +40,16 @@
             </div>
         </div>
         
-        <!-- Description field (full width) -->
         <div class="full-width">
             <label for="class-description">Description:</label>
             <textarea id="class-description" name="description" rows="4" placeholder="Enter class description"></textarea>
         </div>
 
-        <!-- Restrictions fieldset -->
+        <div class="full-width">
+            <label for="class-link">Link:</label>
+            <input type="url" id="class-link" name="link" placeholder="e.g., https://example.com/class-info">
+        </div>
+        
         <fieldset>
             <legend>Restrictions:</legend>
             <div class="restriction-controls">
@@ -72,7 +72,6 @@
             </div>
         </fieldset>
 
-        <!-- Two column layout for prerequisites and corequisites -->
         <div class="input-row">
             <div class="input-column">
                 <div class="input-container">
@@ -90,7 +89,6 @@
             </div>
         </div>
 
-        <!-- Semesters Offered fieldset -->
         <fieldset>
             <legend>Semesters Offered:</legend>
             <label>
@@ -107,7 +105,6 @@
             </label>
         </fieldset>
 
-        <!-- Days Offered fieldset -->
         <fieldset>
             <legend>Days Offered:</legend>
             <label>
@@ -136,6 +133,7 @@
         <button type="submit" id="submit-button">Update Class</button>
     </form>
     <div id="form-message"></div>
+    
     <script src="/js/footer.js"></script>
 </body>
 </html>
