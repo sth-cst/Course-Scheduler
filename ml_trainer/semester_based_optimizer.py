@@ -302,7 +302,7 @@ class SemesterBasedOptimizer:
         return best_semester_idx
 
     def create_schedule(self, processed_data: Dict) -> Dict:
-        """Create a schedule that efficiently uses target number of semesters with dynamic credit allocation"""
+        """Create a schedule that uses exactly the target number of semesters"""
         try:
             # Validate input (same as constraint optimizer)
             if not processed_data.get("classes"):
@@ -669,6 +669,24 @@ class SemesterBasedOptimizer:
             actual_semesters = len(scheduled_semesters)
             logger.info(f"Created schedule with {actual_semesters} semesters (target: {target_semesters})")
             
+            # NEW CODE: Check if we need to spread the schedule
+            if actual_semesters < target_semesters:
+                logger.info(f"Schedule finished efficiently in {actual_semesters} semesters (target: {target_semesters})")
+                logger.info(f"Spreading schedule to use exactly {target_semesters} semesters")
+                
+                # Spread the schedule to fill target_semesters
+                spread_semesters = self._spread_schedule_to_target_semesters(
+                    scheduled_semesters, 
+                    target_semesters,
+                    params["startSemester"]
+                )
+                
+                # Replace with the spread schedule
+                scheduled_semesters = spread_semesters
+                actual_semesters = len(scheduled_semesters)
+                
+                logger.info(f"Successfully spread schedule across {actual_semesters} semesters")
+            
             # Success if within target or only slightly over due to constraints
             met_target = actual_semesters <= target_semesters
             
@@ -939,3 +957,402 @@ class SemesterBasedOptimizer:
             return True
             
         return False
+
+    def _extract_courses_from_schedule(self, schedule: List[Dict]) -> List[Dict]:
+        """Extract all courses from the schedule"""
+        all_courses = []
+        for semester in schedule:
+            all_courses.extend(semester["classes"])
+        return all_courses
+
+    def _spread_schedule_to_target_semesters(self, original_semesters: List[Dict], 
+                                   target_semesters: int,
+                                   start_semester: str) -> List[Dict]:
+        """Spread the schedule to fill exactly the target number of semesters"""
+        if len(original_semesters) >= target_semesters:
+            return original_semesters
+        
+        # 1. Generate empty semesters up to the target
+        spread_semesters = self._create_empty_semesters(start_semester, target_semesters)
+        
+        # 2. Identify prerequisite chains in the original schedule
+        course_chains = self._identify_chains_in_schedule(original_semesters)
+        logger.info(f"Found {len(course_chains)} prerequisite chains to preserve while spreading")
+        
+        # 3. Extract all courses from original schedule grouped by type
+        all_scheduled_courses = self._extract_courses_from_schedule(original_semesters)
+        religion_courses = [c for c in all_scheduled_courses if c.get("course_type") == "religion"]
+        major_courses = [c for c in all_scheduled_courses if c.get("course_type") == "major"]
+        minor_courses = [c for c in all_scheduled_courses if c.get("course_type") == "minor"]
+        other_courses = [c for c in all_scheduled_courses 
+                       if c.get("course_type") not in ["religion", "major", "minor"]]
+        
+        logger.info(f"Extracting courses to spread: {len(religion_courses)} religion, "
+                   f"{len(major_courses)} major, {len(minor_courses)} minor, "
+                   f"{len(other_courses)} other")
+        
+        # 4. Calculate the ideal distribution per semester
+        spread_factor = target_semesters / len(original_semesters)
+        
+        # 5. Sort chains by length and complexity for better spreading
+        sorted_chains = sorted(course_chains, key=len, reverse=True)
+        
+        # 6. First place chains while maintaining prerequisites
+        self._place_chains_in_spread_schedule(sorted_chains, spread_semesters, spread_factor)
+        
+        # 7. Track which courses have been placed from chains
+        placed_course_ids = set()
+        for semester in spread_semesters:
+            for course in semester["classes"]:
+                placed_course_ids.add(course["id"])
+    
+        # 8. Filter out courses already placed in chains
+        religion_courses = [c for c in religion_courses if c["id"] not in placed_course_ids]
+        major_courses = [c for c in major_courses if c["id"] not in placed_course_ids]
+        minor_courses = [c for c in minor_courses if c["id"] not in placed_course_ids]
+        other_courses = [c for c in other_courses if c["id"] not in placed_course_ids]
+        
+        # 9. Place remaining courses with balanced distribution
+        self._distribute_courses_evenly(
+            religion_courses, major_courses, minor_courses, other_courses,
+            spread_semesters
+        )
+        
+        # 10. Update total credits for each semester
+        for semester in spread_semesters:
+            semester["totalCredits"] = sum(c["credits"] for c in semester["classes"])
+    
+        return spread_semesters
+
+    def _create_empty_semesters(self, start_semester: str, target_semesters: int) -> List[Dict]:
+        """Create empty semesters up to the target count"""
+        sem_type, year = start_semester.split()
+        year = int(year)
+        
+        semesters = []
+        for i in range(target_semesters):
+            # Set credit limits
+            if sem_type == "Spring":
+                credit_limit = 12
+            else:
+                credit_limit = 18
+            
+            semester = {
+                "type": sem_type,
+                "year": year,
+                "classes": [],
+                "totalCredits": 0,
+                "creditLimit": credit_limit
+            }
+            semesters.append(semester)
+            
+            # Update for next semester
+            if sem_type == "Fall":
+                sem_type = "Winter"
+                year += 1
+            elif sem_type == "Winter":
+                sem_type = "Spring"
+            else:  # Spring
+                sem_type = "Fall"
+    
+        return semesters
+
+    def _identify_chains_in_schedule(self, schedule: List[Dict]) -> List[List[Dict]]:
+        """Identify prerequisite chains in the scheduled courses"""
+        # Extract all courses from the schedule
+        all_courses = []
+        for semester in schedule:
+            all_courses.extend(semester["classes"])
+    
+        # Create a map of course IDs to courses
+        course_map = {course["id"]: course for course in all_courses}
+    
+        # Find root courses (no prerequisites or prerequisites not in our schedule)
+        scheduled_ids = set(course_map.keys())
+        root_courses = []
+    
+        for course in all_courses:
+            prereqs = course.get("prerequisites", [])
+            if not prereqs or not any(prereq_id in scheduled_ids for prereq_id in prereqs):
+                root_courses.append(course)
+    
+        # Identify chains starting from root courses
+        chains = []
+        visited = set()
+    
+        for root in root_courses:
+            if root["id"] in visited:
+                continue
+                
+            # Find all courses that depend on this course
+            chain = [root]
+            visited.add(root["id"])
+            
+            # Build chain by following prerequisites
+            self._build_chain(root, chain, all_courses, course_map, visited)
+            
+            # Only add chains with more than one course
+            if len(chain) > 1:
+                chains.append(chain)
+        
+        return chains
+
+    def _build_chain(self, current_course: Dict, chain: List[Dict], 
+                   all_courses: List[Dict], course_map: Dict[int, Dict], 
+                   visited: Set[int]) -> None:
+        """Recursively build a prerequisite chain"""
+        # Find all courses that have current_course as a prerequisite
+        for course in all_courses:
+            if course["id"] in visited:
+                continue
+                
+            prereqs = course.get("prerequisites", [])
+            if current_course["id"] in prereqs:
+                chain.append(course)
+                visited.add(course["id"])
+                self._build_chain(course, chain, all_courses, course_map, visited)
+
+    def _place_chains_in_spread_schedule(self, chains: List[List[Dict]], 
+                                       spread_semesters: List[Dict],
+                                       spread_factor: float) -> None:
+        """Place prerequisite chains in the spread schedule"""
+        total_semesters = len(spread_semesters)
+        
+        # Calculate appropriate spacing between chain elements
+        for chain in chains:
+            # Determine ideal spacing based on chain length and spread factor
+            chain_length = len(chain)
+            
+            if chain_length == 1:
+                # Single course - place anywhere with appropriate balance
+                course = chain[0]
+                best_semester_idx = self._find_best_semester_for_standalone(
+                    course, spread_semesters)
+                
+                if best_semester_idx >= 0:
+                    spread_semesters[best_semester_idx]["classes"].append(course)
+                
+            else:
+                # Apply appropriate spacing for chains
+                ideal_spacing = max(1, int(spread_factor))
+                
+                # Find start position that allows the chain to fit
+                max_start = total_semesters - chain_length * ideal_spacing
+                start_idx = min(max(0, int(total_semesters * 0.2)), max_start)
+                
+                # Place chain with spacing
+                for i, course in enumerate(chain):
+                    # Calculate position with spacing
+                    position = start_idx + (i * ideal_spacing)
+                    
+                    # Ensure we don't exceed available semesters
+                    if position < total_semesters:
+                        # Check semester type constraints
+                        sem_idx = position
+                        while sem_idx < total_semesters:
+                            sem_type = spread_semesters[sem_idx]["type"]
+                            if sem_type in course.get("semesters_offered", []):
+                                break
+                            sem_idx += 1
+                        
+                        # If we found a valid semester, place the course
+                        if sem_idx < total_semesters:
+                            spread_semesters[sem_idx]["classes"].append(course)
+                            logger.info(f"Placed chain course {course['class_number']} in semester {sem_idx+1}")
+                            # Avoid placing too many in the same semester
+                            break
+                        
+    def _distribute_courses_evenly(self, religion_courses: List[Dict], 
+                             major_courses: List[Dict],
+                             minor_courses: List[Dict],
+                             other_courses: List[Dict],
+                             spread_semesters: List[Dict]) -> None:
+        """Distribute standalone courses evenly across semesters"""
+        # Try to place one religion course per semester if possible
+        self._distribute_religion_courses(religion_courses, spread_semesters)
+        
+        # Distribute major courses with balance
+        self._distribute_course_type(major_courses, spread_semesters, 'major')
+        
+        # Distribute minor courses with balance
+        self._distribute_course_type(minor_courses, spread_semesters, 'minor')
+        
+        # Distribute remaining courses
+        self._distribute_course_type(other_courses, spread_semesters, 'other')
+
+    def _distribute_religion_courses(self, religion_courses: List[Dict], 
+                              spread_semesters: List[Dict]) -> None:
+        """Try to distribute one religion course per semester"""
+        remaining_courses = religion_courses.copy()
+        
+        # First pass - try to place one religion course per semester
+        for semester_idx, semester in enumerate(spread_semesters):
+            # Skip if semester already has a religion course
+            if any(c.get("course_type") == "religion" for c in semester["classes"]):
+                continue
+            
+            # Find a religion course that can be placed in this semester
+            for course_idx, course in enumerate(remaining_courses):
+                if semester["type"] in course.get("semesters_offered", []):
+                    # Check if prerequisites are satisfied
+                    if self._prerequisites_satisfied_before_semester_dict(course, 
+                                                                      spread_semesters, 
+                                                                      semester_idx):
+                        # Check credit limit
+                        course_credits = course.get("credits", 0)
+                        if semester.get("totalCredits", 0) + course_credits <= semester.get("creditLimit", 18):
+                            semester["classes"].append(course)
+                            semester["totalCredits"] = semester.get("totalCredits", 0) + course_credits
+                            logger.info(f"Placed religion course {course['class_number']} in semester {semester_idx+1}")
+                            remaining_courses.pop(course_idx)
+                            break
+
+        # Second pass - place any remaining religion courses in best available semesters
+        for course in remaining_courses:
+            best_idx = self._find_best_semester_for_standalone(course, spread_semesters)
+            if best_idx >= 0:
+                spread_semesters[best_idx]["classes"].append(course)
+                spread_semesters[best_idx]["totalCredits"] = spread_semesters[best_idx].get("totalCredits", 0) + course.get("credits", 0)
+                logger.info(f"Placed remaining religion course {course['class_number']} in semester {best_idx+1}")
+
+    def _distribute_course_type(self, courses: List[Dict], 
+                         spread_semesters: List[Dict],
+                         course_type: str) -> None:
+        """Distribute courses of a specific type evenly across semesters"""
+        remaining_courses = courses.copy()
+        
+        # Calculate ideal distribution
+        if not courses:
+            return
+            
+        courses_per_semester = max(1, len(courses) / len(spread_semesters))
+        logger.info(f"Ideal distribution: {courses_per_semester:.2f} {course_type} courses per semester")
+        
+        # Count existing courses of this type in each semester
+        type_counts = []
+        for semester in spread_semesters:
+            count = sum(1 for c in semester["classes"] if c.get("course_type") == course_type)
+            type_counts.append(count)
+        
+        # Try to distribute evenly
+        while remaining_courses:
+            # Find semester with fewest courses of this type
+            min_count = min(type_counts)
+            semester_idx = type_counts.index(min_count)
+            
+            # Try to place a course in this semester
+            placed = False
+            for course_idx, course in enumerate(remaining_courses):
+                semester = spread_semesters[semester_idx]
+                
+                # Check if course can be placed in this semester
+                if semester["type"] in course.get("semesters_offered", []):
+                    # Check prerequisites
+                    if self._prerequisites_satisfied_before_semester_dict(course, 
+                                                                       spread_semesters, 
+                                                                       semester_idx):
+                        # Check credit limit
+                        course_credits = course.get("credits", 0)
+                        if semester.get("totalCredits", 0) + course_credits <= semester.get("creditLimit", 18):
+                            semester["classes"].append(course)
+                            semester["totalCredits"] = semester.get("totalCredits", 0) + course_credits
+                            logger.info(f"Placed {course_type} course {course['class_number']} in semester {semester_idx+1}")
+                            remaining_courses.pop(course_idx)
+                            type_counts[semester_idx] += 1
+                            placed = True
+                            break
+            
+            # If we couldn't place a course in the current semester, try the next one
+            if not placed:
+                # Mark this semester as full for this course type
+                type_counts[semester_idx] = max(type_counts) + 1
+                
+                # If we've tried all semesters, use best fit for remaining courses
+                if min(type_counts) > max(len(courses) / len(spread_semesters) * 2, 5):
+                    break
+    
+        # Place any remaining courses in best available semesters
+        for course in remaining_courses:
+            best_idx = self._find_best_semester_for_standalone(course, spread_semesters)
+            if best_idx >= 0:
+                spread_semesters[best_idx]["classes"].append(course)
+                spread_semesters[best_idx]["totalCredits"] = spread_semesters[best_idx].get("totalCredits", 0) + course.get("credits", 0)
+                logger.info(f"Placed remaining {course_type} course {course['class_number']} in semester {best_idx+1}")
+
+    def _find_best_semester_for_standalone(self, course: Dict, 
+                                     spread_semesters: List[Dict]) -> int:
+        """Find the best semester for a standalone course considering balance"""
+        valid_semesters = []
+        
+        # First check semester offerings constraint
+        for idx, semester in enumerate(spread_semesters):
+            if semester["type"] in course.get("semesters_offered", []):
+                # Check prerequisites
+                if self._prerequisites_satisfied_before_semester_dict(
+                    course, spread_semesters, idx):
+                    valid_semesters.append(idx)
+    
+        if not valid_semesters:
+            return -1  # No valid semester found
+        
+        # Score each valid semester based on balance criteria
+        best_score = -1
+        best_idx = -1
+        
+        for idx in valid_semesters:
+            semester = spread_semesters[idx]
+            
+            # Count courses by type in this semester
+            religion_count = sum(1 for c in semester["classes"] 
+                              if c.get("course_type") == "religion")
+            major_count = sum(1 for c in semester["classes"] 
+                            if c.get("course_type") == "major")
+            minor_count = sum(1 for c in semester["classes"] 
+                            if c.get("course_type") == "minor")
+            
+            # Calculate credit load if we add this course
+            total_credits = semester.get("totalCredits", 0) + course.get("credits", 0)
+            
+            # Calculate score based on balanced distribution
+            score = 0
+            
+            # Prefer semesters with fewer courses of the same type
+            if course.get("course_type") == "religion":
+                score -= religion_count * 10  # Strongly avoid multiple religion courses
+            elif course.get("course_type") == "major":
+                score -= major_count * 3      # Avoid too many major courses
+            elif course.get("course_type") == "minor":
+                score -= minor_count * 3      # Avoid too many minor courses
+            
+            # Prefer semesters with fewer courses overall
+            score -= len(semester["classes"]) * 2
+            
+            # Prefer semesters with more room for credits
+            credit_limit = semester.get("creditLimit", 18)
+            credit_room = credit_limit - total_credits
+            if credit_room >= 0:
+                score += credit_room
+            else:
+                score -= 100  # Strong penalty for exceeding credit limit
+            
+            if score > best_score:
+                best_score = score
+                best_idx = idx
+        
+        return best_idx
+
+    def _prerequisites_satisfied_before_semester_dict(self, course: Dict, 
+                                               scheduled_semesters: List[Dict], 
+                                               semester_idx: int) -> bool:
+        """Check if prerequisites are satisfied in previous semesters"""
+        # No prerequisites
+        if not course.get("prerequisites", []):
+            return True
+        
+        # Check all previous semesters
+        scheduled_ids = set()
+        for i in range(semester_idx):
+            for c in scheduled_semesters[i]["classes"]:
+                scheduled_ids.add(c["id"])
+    
+        return all(prereq_id in scheduled_ids for prereq_id in course.get("prerequisites", []))

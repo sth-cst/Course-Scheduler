@@ -787,97 +787,6 @@ async function generateScheduleFromSelections(event) {
   }
 }
 
-// Add the missing generateScheduleFromCredits function
-async function generateScheduleFromCredits(event) {
-  event.preventDefault();
-  console.log("Starting credits-based schedule generation...");
-
-  const generateButton = document.getElementById("calculate-schedule");
-  generateButton.textContent = "Generating...";
-  generateButton.disabled = true;
-
-  try {
-    // Build the minimal payload using the new structure
-    const payload = await buildMinimalSchedulePayload();
-    
-    console.log("Sending minimal payload to AI scheduler:", payload);
-
-    // Send to the AI scheduler endpoint
-    const response = await fetch('/api/generate-schedule', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("API error response:", errorText);
-      throw new Error(`API returned status: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    console.log("AI-generated schedule received:", result);
-    
-    // Render the returned schedule
-    renderSchedule(result.schedule);
-
-    // Add improvements explanation if available
-    if (result.improvements && result.improvements.length > 0) {
-      const improvementsContainer = document.createElement('div');
-      improvementsContainer.className = 'improvements-container';
-      improvementsContainer.innerHTML = '<h3>Schedule Insights</h3><ul>' +
-        result.improvements.map(improvement => `<li>${improvement}</li>`).join('') +
-        '</ul>';
-        
-      document.getElementById('schedule-container').appendChild(improvementsContainer);
-    }
-
-    // Add export button
-    const scheduleJson = JSON.stringify(result.schedule, null, 2);
-    const exportButton = document.createElement('button');
-    exportButton.textContent = 'Export Schedule JSON';
-    exportButton.className = 'export-button';
-    exportButton.addEventListener('click', () => {
-      const blob = new Blob([scheduleJson], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'schedule.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    });
-
-    document.getElementById('schedule-container').appendChild(exportButton);
-
-  } catch (error) {
-    console.error("Error generating schedule:", error);
-    alert("There was an error generating your schedule. Please try again.");
-  } finally {
-    generateButton.textContent = "Generate Schedule";
-    generateButton.disabled = false;
-  }
-}
-
-// Add missing helper functions for semester-based generation
-function showLoadingIndicator() {
-  // Add your loading indicator logic here if needed
-  console.log("Loading...");
-}
-
-function hideLoadingIndicator() {
-  // Add your loading indicator hide logic here if needed
-  console.log("Loading complete");
-}
-
-async function fetchRequiredCourseData(majorId, minor1Id, minor2Id, eilLevel) {
-  // For now, use the same function as the credits-based approach
-  return await fetchOrganizedCourseData(majorId, minor1Id, minor2Id, eilLevel);
-}
-
 // Render the schedule to the UI
 function renderSchedule(schedule) {
     const scheduleContainer = document.getElementById('schedule-container');
@@ -886,18 +795,6 @@ function renderSchedule(schedule) {
     // Remove the 'hidden' class and clear previous content
     scheduleContainer.classList.remove('hidden');
     scheduleContainer.innerHTML = '';
-
-    // Check if schedule is empty or invalid
-    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
-        scheduleContainer.innerHTML = `
-            <div class="error-message">
-                <h3>Unable to Generate Schedule</h3>
-                <p>Could not create a valid schedule with the given requirements.</p>
-                <p>Try adjusting your course selections or credit limits.</p>
-            </div>
-        `;
-        return;
-    }
 
     // Create and add summary box
     const summaryBox = createSummaryBox(schedule);
@@ -976,18 +873,6 @@ function renderSchedule(schedule) {
 
 // Helper function to create summary box
 function createSummaryBox(schedule) {
-    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
-        const emptyBox = document.createElement('div');
-        emptyBox.className = 'summary-box';
-        emptyBox.innerHTML = `
-            <div class="summary-item animated-box">
-                <p>No Schedule Generated</p>
-                <h2>-</h2>
-            </div>
-        `;
-        return emptyBox;
-    }
-
     const summaryBox = document.createElement('div');
     summaryBox.className = 'summary-box';
     summaryBox.id = 'summary';
@@ -1244,49 +1129,44 @@ async function generateScheduleFromSemesters(event) {
   event.preventDefault();
   console.log("Generating schedule by number of semesters...");
   
+  // Show loading indicator
+  showLoadingIndicator();
+  const generateButton = document.getElementById("calculate-schedule-sem");
+  generateButton.textContent = "Generating...";
+  generateButton.disabled = true;
+  
   try {
-    // Get all required form elements
-    const formElements = {
-      selectedMajor: document.getElementById("selectedMajor-sem"),
-      selectedMinor1: document.getElementById("selectedMinor1-sem"),
-      selectedMinor2: document.getElementById("selectedMinor2-sem"),
-      englishLevel: document.getElementById("english-level-sem"),
-      startSemester: document.getElementById("start-semester-sem"),
-      totalSemesters: document.getElementById("total-semesters"),
-      majorClassLimit: document.getElementById("major-class-limit-sem")
-    };
-
-    // Check if any elements are missing
-    const missingElements = Object.entries(formElements)
-      .filter(([key, element]) => !element)
-      .map(([key]) => key);
-
-    if (missingElements.length > 0) {
-      throw new Error(`Missing form elements: ${missingElements.join(', ')}`);
-    }
-
-    showLoadingIndicator();
-    const generateButton = document.getElementById("calculate-schedule-sem");
-    generateButton.textContent = "Generating...";
-    generateButton.disabled = true;
-
-    // Now safely get values from form elements
+    // Get selected values from the semesters-based form
+    const selectedMajor = Number(document.getElementById("selectedMajor-sem").value);
+    const selectedMinor1 = Number(document.getElementById("selectedMinor1-sem").value);
+    const selectedMinor2 = Number(document.getElementById("selectedMinor2-sem").value);
+    const englishLevel = document.getElementById("english-level-sem").value;
+    
+    // Fetch detailed course data
     const courseData = await fetchRequiredCourseData(
-      Number(formElements.selectedMajor.value),
-      Number(formElements.selectedMinor1.value),
-      Number(formElements.selectedMinor2.value),
-      formElements.englishLevel.value
+      selectedMajor, 
+      selectedMinor1, 
+      selectedMinor2, 
+      englishLevel
     );
-
+    
+    // Get other settings
+    const startSemester = document.getElementById("start-semester-sem").value;
+    const targetSemesters = parseInt(document.getElementById("total-semesters").value);
+    const majorClassLimit = parseInt(document.getElementById("major-class-limit-sem").value, 10); // ADD THIS LINE
+    
+    // Prepare preferences object
     const preferences = {
-      startSemester: formElements.startSemester.value,
-      targetSemesters: parseInt(formElements.totalSemesters.value),
-      majorClassLimit: parseInt(formElements.majorClassLimit.value),
+      startSemester,
+      targetSemesters,
+      majorClassLimit, // ADD THIS LINE
       approach: "semesters-based"
     };
-
-    // Add first year limits if that option is checked
+    
+    // Check if first year credits are limited
     const limitFirstYear = document.getElementById("limit-first-year-sem").checked;
+    
+    // Add first year limits if that option is checked
     if (limitFirstYear) {
       preferences.limitFirstYear = true;
       preferences.firstYearLimits = {
@@ -1294,32 +1174,109 @@ async function generateScheduleFromSemesters(event) {
         springCredits: parseInt(sessionStorage.getItem('firstYearSpringCredits') || 10)
       };
     }
-
-    // Prepare the complete payload
-    const payload = {
+    
+    // Prepare the complete data package for the AI scheduler
+    const schedulerData = {
       courseData: courseData,
       preferences: preferences
     };
+    
+    console.log("Sending data to AI scheduler:", schedulerData);
+  
+    // Send request to generate schedule
+    const response = await fetch('/api/generate-schedule', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(schedulerData)
+    });
+    
+    // Debug: Log the raw response
+    console.log("Response status:", response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("API error response:", errorText);
+      throw new Error(`API returned status: ${response.status}`);
+    }
+    
+    // Get the JSON data
+    const result = await response.json();
+    console.log("Schedule data received:", result);
+    
+    // Check if we have the expected data structure
+    if (!result.schedule || !Array.isArray(result.schedule)) {
+      console.error("Invalid schedule format:", result);
+      alert("Received invalid schedule data. Check console for details.");
+      hideLoadingIndicator();
+      return;
+    }
+    
+    // Make sure schedule container exists
+    const scheduleContainer = document.getElementById('schedule-container');
+    if (!scheduleContainer) {
+      console.error("Schedule container not found in DOM!");
+      alert("Cannot display schedule: container element not found.");
+      hideLoadingIndicator();
+      return;
+    }
+    
+    console.log("About to render semester-based schedule with", result.schedule.length, "semesters");
+    
+    // Render the schedule
+    renderSchedule(result.schedule);
+    
+    // Add metadata if available
+    if (result.metadata) {
+      const metadataContainer = document.createElement('div');
+      metadataContainer.className = 'schedule-metadata';
+      metadataContainer.innerHTML = `
+        <h3>Schedule Quality: ${Math.round(result.metadata.score * 100)}%</h3>
+        <div class="improvements">
+          ${result.metadata.improvements.map(imp => `<p>• ${imp}</p>`).join('')}
+        </div>
+      `;
+      scheduleContainer.appendChild(metadataContainer);
+    }
+    
+  } catch (error) {
+    console.error("Error generating schedule:", error);
+    alert("There was an error generating your schedule. Please try again.");
+  } finally {
+    // Reset button and hide loading indicator
+    generateButton.textContent = "Generate Schedule";
+    generateButton.disabled = false;
+    hideLoadingIndicator();
+  }
+}
 
-    console.log("Sending semester-based payload:", payload);
-
-    // Send request with timeout handling
+// Function to generate schedule based on credits per semester
+async function generateScheduleFromCredits() {
+  try {
+    showLoadingIndicator();
+    
+    const payload = await buildSchedulePayload();
+    console.log("Sending payload:", payload);
+    
+    // Add timeout configuration
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
     const response = await fetch('/api/generate-schedule', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload),
       signal: controller.signal
     });
-
+    
     clearTimeout(timeoutId);
-
+    
     if (!response.ok) {
       const errorText = await response.text();
       console.error("API error response:", errorText);
       
+      // Handle specific error cases
       if (errorText.includes('timeout')) {
         throw new Error("Schedule generation is taking longer than expected. Please try again with fewer courses or simpler requirements.");
       } else if (response.status === 500) {
@@ -1327,17 +1284,28 @@ async function generateScheduleFromSemesters(event) {
       }
       throw new Error(`Server error: ${response.status}`);
     }
-
+    
     const result = await response.json();
     console.log("Schedule data received:", result);
-
+    
     if (!result.schedule || !Array.isArray(result.schedule)) {
-      throw new Error("Invalid schedule format received");
+      console.error("Invalid schedule format:", result);
+      alert("Received invalid schedule data. Check console for details.");
+      return;
     }
-
+    
+    const scheduleContainer = document.getElementById('schedule-container');
+    if (!scheduleContainer) {
+      console.error("Schedule container not found in DOM!");
+      alert("Cannot display schedule: container element not found.");
+      return;
+    }
+    
+    console.log("About to render schedule with", result.schedule.length, "semesters");
+    
     // Render the schedule
     renderSchedule(result.schedule);
-
+    
     // Add metadata if available
     if (result.metadata) {
       const metadataContainer = document.createElement('div');
@@ -1348,206 +1316,311 @@ async function generateScheduleFromSemesters(event) {
           ${result.metadata.improvements ? result.metadata.improvements.map(imp => `<p>• ${imp}</p>`).join('') : ''}
         </div>
       `;
-      document.getElementById('schedule-container').appendChild(metadataContainer);
+      scheduleContainer.appendChild(metadataContainer);
     }
-
+    
   } catch (error) {
     console.error("Error generating schedule:", error);
     alert("Failed to generate schedule: " + error.message);
   } finally {
-    // Reset button and hide loading indicator
-    const generateButton = document.getElementById("calculate-schedule-sem");
-    generateButton.textContent = "Generate Schedule";
-    generateButton.disabled = false;
     hideLoadingIndicator();
   }
 }
 
 /**
- * Builds a minimal schedule payload organized by courses and sections
+ * Fetches required course data for the AI scheduler, ensuring all prerequisites
+ * and corequisites are included while excluding unnecessary fields like descriptions
+ * @param {number} majorId - ID of selected major
+ * @param {number} minor1Id - ID of first selected minor
+ * @param {number} minor2Id - ID of second selected minor
+ * @param {string} eilLevel - Selected EIL level
+ * @returns {Promise<Array>} - Optimized course data array
  */
-async function buildMinimalSchedulePayload() {
-  // Get selected course IDs
-  const selectedMajor = Number(document.getElementById("selectedMajor").value);
-  const selectedMinor1 = Number(document.getElementById("selectedMinor1").value);
-  const selectedMinor2 = Number(document.getElementById("selectedMinor2").value);
-  const englishLevel = document.getElementById("english-level").value;
-  
-  // Get preferences
-  const startSemester = document.getElementById("start-semester").value;
-  const majorClassLimit = parseInt(document.getElementById("major-class-limit").value, 10);
-  const fallWinterCredits = parseInt(document.getElementById("fall-winter-credits").value, 10);
-  const springCredits = parseInt(document.getElementById("spring-credits").value, 10);
-  const limitFirstYear = document.getElementById("limit-first-year-credits").checked;
-  
-  // Fetch organized course data
-  const courseData = await fetchOrganizedCourseData(
-    selectedMajor, 
-    selectedMinor1, 
-    selectedMinor2, 
-    englishLevel
-  );
-  
-  const payload = {
-    // User preferences (essential for scheduling logic)
-    preferences: {
-      startSemester,
-      majorClassLimit,
-      fallWinterCredits,
-      springCredits,
-      approach: "credits-based"
-    },
-    
-    // Organized course data following Payload.json structure
-    courseData: courseData
-  };
-  
-  // Add first year limits if enabled
-  if (limitFirstYear) {
-    payload.preferences.limitFirstYear = true;
-    payload.preferences.firstYearLimits = {
-      fallWinterCredits: parseInt(sessionStorage.getItem('firstYearFallWinterCredits') || 15),
-      springCredits: parseInt(sessionStorage.getItem('firstYearSpringCredits') || 10)
-    };
-  }
-  
-  return payload;
-}
-
-/**
- * Fetches and organizes course data in minimal format following Payload.json structure
- */
-async function fetchOrganizedCourseData(majorId, minor1Id, minor2Id, eilLevel) {
+async function fetchRequiredCourseData(majorId, minor1Id, minor2Id, eilLevel) {
   try {
     const courseData = [];
-    const classCache = new Map(); // Cache for fetched class data
-    
-    // Helper to fetch class data with caching
-    const fetchClassData = async (classId) => {
-      if (classCache.has(classId)) {
-        return classCache.get(classId);
-      }
-      
+    const includedClassIds = new Set();
+    const requiredClassIds = new Set();
+    // NEW: Track classes that belong to main courses vs. additional prereqs
+    const mainCourseClassIds = new Set();
+
+    // Helper function to fetch course data with better error handling
+    const fetchCourse = async (id) => {
       try {
-        const response = await fetch(`/api/classes/${classId}?fields=essential`);
-        if (response.ok) {
-          const classData = await response.json();
-          const minimalClass = {
-            id: classData.id,
-            class_name: classData.class_name,
-            class_number: classData.class_number,
-            semesters_offered: classData.semesters_offered || [],
-            credits: classData.credits,
-            is_senior_class: classData.is_senior_class || false,
-            restrictions: classData.restrictions || "",
-            is_elective: classData.is_elective || false
-          };
-          classCache.set(classId, minimalClass);
-          return minimalClass;
+        const response = await fetch(`/api/courses/${id}?fields=essential`);
+        if (!response.ok) {
+          console.error(`API error for course ${id}: ${response.status}`);
+          throw new Error(`Failed to fetch course ${id}`);
         }
-      } catch (error) {
-        console.warn(`Could not fetch class ${classId}:`, error);
-      }
-      return null;
-    };
-    
-    // Helper to process prerequisites/corequisites arrays
-    const processClassDependencies = async (dependencies) => {
-      if (!Array.isArray(dependencies)) return [];
-      
-      const processedDeps = [];
-      for (const dep of dependencies) {
-        if (typeof dep === 'number') {
-          // Fetch full class information for numeric IDs
-          const classInfo = await fetchClassData(dep);
-          if (classInfo) {
-            processedDeps.push(classInfo);
-          }
-        } else if (typeof dep === 'object' && dep.id) {
-          // Already an object with class info
-          processedDeps.push({
-            id: dep.id,
-            class_name: dep.class_name || '',
-            class_number: dep.class_number || '',
-            semesters_offered: dep.semesters_offered || [],
-            credits: dep.credits || 3,
-            is_senior_class: dep.is_senior_class || false,
-            restrictions: dep.restrictions || "",
-            is_elective: dep.is_elective || false
-          });
-        }
-      }
-      return processedDeps;
-    };
-    
-    // Helper to fetch and minimize course data
-    const fetchAndMinimizeCourse = async (courseId) => {
-      const response = await fetch(`/api/courses/${courseId}?fields=essential`);
-      if (!response.ok) throw new Error(`Failed to fetch course ${courseId}`);
-      const fullCourseData = await response.json();
-      
-      // Create minimal course structure
-      const minimalCourse = {
-        id: fullCourseData.id,
-        course_name: fullCourseData.course_name,
-        course_type: fullCourseData.course_type,
-        holokai: fullCourseData.holokai || null,
-        sections: []
-      };
-      
-      // Process sections
-      if (fullCourseData.sections) {
-        for (const section of fullCourseData.sections) {
-          const minimalSection = {
-            id: section.id,
-            section_name: section.section_name,
-            credits_required: section.credits_required || 0,
-            is_required: section.is_required,
-            credits_needed_to_take: section.credits_needed_to_take || null,
-            classes: []
-          };
-          
-          // Process classes in each section
-          if (section.classes) {
-            for (const cls of section.classes) {
-              // Process prerequisites and corequisites
-              const prerequisites = await processClassDependencies(cls.prerequisites);
-              const corequisites = await processClassDependencies(cls.corequisites);
-              
-              // Create minimal class structure with full dependency info
-              const minimalClass = {
-                id: cls.id,
-                class_name: cls.class_name,
-                class_number: cls.class_number,
-                semesters_offered: cls.semesters_offered || [],
-                prerequisites: prerequisites,
-                corequisites: corequisites,
-                credits: cls.credits,
-                is_senior_class: cls.is_senior_class || false,
-                restrictions: cls.restrictions || "",
-                is_elective: cls.is_elective || false
-              };
-              
-              minimalSection.classes.push(minimalClass);
+        
+        const courseData = await response.json();
+        
+        // Process each class to identify missing prerequisites/corequisites
+        courseData.sections.forEach(section => {
+          section.classes.forEach(classItem => {
+            // Add this class ID to our included set
+            includedClassIds.add(classItem.id);
+            // NEW: Mark this class as part of a main course
+            mainCourseClassIds.add(classItem.id);
+            
+            // Check prerequisites for classes we need to fetch later
+            if (Array.isArray(classItem.prerequisites)) {
+              classItem.prerequisites.forEach(prereq => {
+                const prereqId = typeof prereq === 'object' ? prereq.id : prereq;
+                if (prereqId && !includedClassIds.has(prereqId)) {
+                  requiredClassIds.add(prereqId);
+                }
+              });
             }
-          }
-          
-          minimalCourse.sections.push(minimalSection);
-        }
+            
+            // Check corequisites for classes we need to fetch later
+            if (Array.isArray(classItem.corequisites)) {
+              classItem.corequisites.forEach(coreq => {
+                const coreqId = typeof coreq === 'object' ? coreq.id : coreq;
+                if (coreqId && !includedClassIds.has(coreqId)) {
+                  requiredClassIds.add(coreqId);
+                }
+              });
+            }
+          });
+        });
+        
+        return courseData;
+      } catch (error) {
+        console.error(`Error fetching course ${id}:`, error);
+        throw error;
       }
-      
-      return minimalCourse;
     };
-    
-    // Fetch main courses
+
+    // Fetch class by ID (for prerequisites/corequisites)
+    const fetchClass = async (id) => {
+      try {
+        const response = await fetch(`/api/classes/${id}?fields=essential`);
+        if (!response.ok) {
+          console.error(`API error for class ${id}: ${response.status}`);
+          throw new Error(`Failed to fetch class ${id}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error(`Error fetching class ${id}:`, error);
+        throw error;
+      }
+    };
+
+    // Fetch major data if selected
     if (majorId) {
-      const majorData = await fetchAndMinimizeCourse(majorId);
+      const majorData = await fetchCourse(majorId);
       courseData.push(majorData);
     }
     
+    // Fetch minor1 data if selected
     if (minor1Id) {
-      const minor1Data = await fetchAndMinimizeCourse(minor1Id);
+      const minor1Data = await fetchCourse(minor1Id);
       courseData.push(minor1Data);
+    }
+    
+    // Fetch minor2 data if selected
+    if (minor2Id) {
+      const minor2Data = await fetchCourse(minor2Id);
+      courseData.push(minor2Data);
+    }
+    
+    // Always fetch religion data (ID 2)
+    const religionData = await fetchCourse(2);
+    courseData.push(religionData);
+    
+    // Handle EIL level options
+    if (eilLevel) {
+      if (eilLevel === "Fluent") {
+        // Even for fluent students, fetch course with ID 7
+        const fluentCourseData = await fetchCourse(7);
+        courseData.push(fluentCourseData);
+      } else {
+        // Determine EIL ID based on the level
+        const eilId = eilLevel.includes("Level 1") ? 5 : 6;
+        const eilData = await fetchCourse(eilId);
+        courseData.push(eilData);
+      }
+    }
+    
+    // Now fetch any missing prerequisite/corequisite classes
+    // and add them to an additionalClasses array
+    const additionalClasses = [];
+    const processedIds = new Set([...includedClassIds]);
+    
+    // We'll process in waves to capture nested prerequisites
+    while (requiredClassIds.size > 0) {
+      const currentBatch = [...requiredClassIds];
+      requiredClassIds.clear(); // Reset for next wave
+      
+      for (const classId of currentBatch) {
+        // NEW: Skip if this class is already part of a main course
+        if (!processedIds.has(classId) && !mainCourseClassIds.has(classId)) {
+          processedIds.add(classId);
+          
+          try {
+            const classData = await fetchClass(classId);
+            additionalClasses.push(classData);
+            
+            // Check for nested prerequisites/corequisites
+            if (Array.isArray(classData.prerequisites)) {
+              classData.prerequisites.forEach(prereq => {
+                const prereqId = typeof prereq === 'object' ? prereq.id : prereq;
+                if (prereqId && !processedIds.has(prereqId) && !mainCourseClassIds.has(prereqId)) {
+                  requiredClassIds.add(prereqId);
+                }
+              });
+            }
+            
+            if (Array.isArray(classData.corequisites)) {
+              classData.corequisites.forEach(coreq => {
+                const coreqId = typeof coreq === 'object' ? coreq.id : coreq;
+                if (coreqId && !processedIds.has(coreqId) && !mainCourseClassIds.has(coreqId)) {
+                  requiredClassIds.add(coreqId);
+                }
+              });
+            }
+          } catch (error) {
+            console.warn(`Could not fetch additional class ${classId}:`, error);
+          }
+        }
+      }
+    }
+    
+    // Add the additional classes to the payload only if there are any
+    if (additionalClasses.length > 0) {
+      courseData.push({
+        id: 'additional',
+        course_name: 'Additional Prerequisites/Corequisites',
+        course_type: 'system',
+        sections: [{
+          id: 'additional-section',
+          section_name: 'Required External Classes',
+          classes: additionalClasses
+        }]
+      });
+    }
+    
+    return courseData;
+  } catch (error) {
+    console.error("Critical error fetching course data:", error);
+    throw error;
+  }
+}
+
+/**
+ * Development helper: Shows the JSON payload structure in the console
+ */
+function previewSchedulerPayload(type = 'credits') {
+  const isCredits = type === 'credits';
+  
+  // Get values from the appropriate form
+  const selectedMajor = Number(document.getElementById(isCredits ? "selectedMajor" : "selectedMajor-sem").value);
+  const selectedMinor1 = Number(document.getElementById(isCredits ? "selectedMinor1" : "selectedMinor1-sem").value);
+  const selectedMinor2 = Number(document.getElementById(isCredits ? "selectedMinor2" : "selectedMinor2-sem").value);
+  const englishLevel = document.getElementById(isCredits ? "english-level" : "english-level-sem").value;
+  
+  // Get preferences
+  let preferences = {};
+  
+  if (isCredits) {
+    preferences = {
+      startSemester: document.getElementById("start-semester").value,
+      majorClassLimit: parseInt(document.getElementById("major-class-limit").value, 10),
+      fallWinterCredits: parseInt(document.getElementById("fall-winter-credits").value, 10),
+      springCredits: parseInt(document.getElementById("spring-credits").value, 10),
+      limitFirstYear: document.getElementById("limit-first-year-credits").checked,
+      approach: "credits-based"
+    };
+  } else {
+    preferences = {
+      startSemester: document.getElementById("start-semester-sem").value,
+      targetSemesters: parseInt(document.getElementById("total-semesters").value),
+      fallWinterCredits: document.getElementById("limit-first-year-sem").checked ? 15 : 18,
+      springCredits: document.getElementById("limit-first-year-sem").checked ? 10 : 12,
+      limitFirstYear: document.getElementById("limit-first-year-sem").checked,
+      approach: "semesters-based"
+    };
+  }
+  
+  console.log(`Preview of ${type} payload:`, {
+    majorId: selectedMajor,
+    minor1Id: selectedMinor1, 
+    minor2Id: selectedMinor2,
+    eilLevel: englishLevel,
+    preferences: preferences
+  });
+  
+  console.log("The actual API call will include the full course data from the database");
+}
+
+// Add this code where you handle the response from the generate-schedule endpoint
+
+async function generateScheduleFromCredits() {
+  try {
+    showLoadingIndicator();
+    
+    const payload = await buildSchedulePayload();
+    console.log("Sending payload:", payload);
+    
+    // Add timeout configuration
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
+    const response = await fetch('/api/generate-schedule', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("API error response:", errorText);
+      
+      // Handle specific error cases
+      if (errorText.includes('timeout')) {
+        throw new Error("Schedule generation is taking longer than expected. Please try again with fewer courses or simpler requirements.");
+      } else if (response.status === 500) {
+        throw new Error("The schedule generator is currently unavailable. Please try again in a few minutes.");
+      }
+      throw new Error(`Server error: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log("Schedule data received:", result);
+    
+    if (!result.schedule || !Array.isArray(result.schedule)) {
+      console.error("Invalid schedule format:", result);
+      alert("Received invalid schedule data. Check console for details.");
+      return;
+    }
+    
+    const scheduleContainer = document.getElementById('schedule-container');
+    if (!scheduleContainer) {
+      console.error("Schedule container not found in DOM!");
+      alert("Cannot display schedule: container element not found.");
+      return;
+    }
+    
+    console.log("About to render schedule with", result.schedule.length, "semesters");
+    
+    // Render the schedule
+    renderSchedule(result.schedule);
+    
+    // Add metadata if available
+    if (result.metadata) {
+      const metadataContainer = document.createElement('div');
+      metadataContainer.className = 'schedule-metadata';
+      metadataContainer.innerHTML = `
+        <h3>Schedule Quality: ${Math.round(result.metadata.score * 100)}%</h3>
+        <div class="improvements">
+          ${result.metadata.improvements ? result.metadata.improvements.map(imp => `<p>• ${imp}</p>`).join('') : ''}
+        </div>
+      `;
+      scheduleContainer.appendChild(metadataContainer);
     }
     
   } catch (error) {
@@ -1700,16 +1773,8 @@ function showClassDetails(classData) {
         </div>
         
         <div class="details-section">
-            <h3>Co-requisites</h3>
+            <h3>Corequisites</h3>
             <p>${corequisites}</p>
-        </div>
-        <div class="details-section">
-            <h3>Instructor</h3>
-            <p>${classData.professor || 'Not assigned'}</p>
-        </div>
-        <div class="details-section">
-            <h3>Link to Class</h3>
-            <p>${classData.link || 'No link available.'}</p>
         </div>
     `;
 
@@ -1730,33 +1795,3 @@ function showClassDetails(classData) {
         e.stopPropagation();
     });
 }
-    if (minor2Id) {
-      const minor2Data = await fetchAndMinimizeCourse(minor2Id);
-      courseData.push(minor2Data);
-    }
-    
-    // Always fetch religion data (ID 2)
-    const religionData = await fetchAndMinimizeCourse(2);
-    courseData.push(religionData);
-    
-    // Handle EIL level
-    if (eilLevel) {
-      if (eilLevel === "Fluent") {
-        const fluentData = await fetchAndMinimizeCourse(7);
-        courseData.push(fluentData);
-      } else {
-        const eilId = eilLevel.includes("Level 1") ? 5 : 6;
-        const eilData = await fetchAndMinimizeCourse(eilId);
-        courseData.push(eilData);
-      }
-    }
-    
-    return courseData;
-  } catch (error) {
-    console.error("Error fetching organized course data:", error);
-    throw error;
-  }
-}
-
-//# sourceMappingURL=app.js.map
-
